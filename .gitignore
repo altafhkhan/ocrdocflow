@@ -1,0 +1,61 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Node --no files
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# React / Vite
+dist/
+build/
+.vite/
+
+ReviewModal_old.tsx
+
+# IDE --no files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# OS --no files
+.DS_Store
+Thumbs.db
+
+# Python testing --no files
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs --no files
+*.log
+
+# Database / local data -- no files
+*.sqlite
+*.sqlite3
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files -- no files
+*.tmp
+*.temp
+
+# Local uploads / generated files --no files
+uploads/
+temp/
+storage/
+
+# Secrets / certificates
+*.pem
+*.key
+*.crt

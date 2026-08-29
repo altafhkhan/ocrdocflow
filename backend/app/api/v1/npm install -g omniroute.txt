@@ -1,0 +1,11 @@
+npm install -g omniroute
+$ omniroute
+dashboard http://localhost:20128
+
+$ curl localhost:20128/v1/models
+
+------------------------
+
+kimi
+user: Moonwalker6053
+

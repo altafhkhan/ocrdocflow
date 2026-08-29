@@ -1,0 +1,161 @@
+
+
+<!--
+  ============================================================
+  QUMAXA WEBSITE - "Products" nav link + section (OCRDocFlow)
+  ============================================================
+  This is a self-contained snippet - it doesn't depend on any specific
+  website platform (WordPress, Webflow, plain HTML, etc). Give this
+  whole file to whoever manages/hosts qumaxa.com, or paste it into a
+  "Custom HTML" / "Embed" block if your site builder has one.
+
+  IMPORTANT: The button below currently points to a LOCAL address
+  (http://localhost:5173) - this only works on Khan's own computer for
+  testing. Once OCRDocFlow is deployed to a real public server, replace
+  every occurrence of "http://localhost:5173" below with the real
+  public URL (e.g. https://app.ocrdocflow.com).
+-->
+
+<!-- ============ 1) ADD THIS TO THE NAV BAR ============
+     Insert as a new item in the existing nav list, e.g. right after
+     the "Services" link:
+     [Services] [Products] [ERP] [Projects] [Why Us] [Contact]
+-->
+<a href="#products" class="qmx-nav-link">Products</a>
+
+
+<!-- ============ 2) ADD THIS SECTION SOMEWHERE IN THE PAGE ============
+     A natural spot is right after the "Services We Offer" section and
+     before "ERP Consultation & Expertise" - but anywhere between
+     existing sections works.
+-->
+<section id="products" class="qmx-products-section">
+  <div class="qmx-products-inner">
+    <p class="qmx-eyebrow">Our Products</p>
+    <h2 class="qmx-heading">Software We've Built For You to Try</h2>
+    <p class="qmx-subheading">
+      Beyond client projects, we build our own products - ready for you to test today.
+    </p>
+
+    <div class="qmx-product-card">
+      <div class="qmx-product-icon">📄</div>
+      <div class="qmx-product-content">
+        <h3>OCRDocFlow</h3>
+        <p>
+          AI-powered invoice and document processing. Upload a scanned invoice
+          and watch it automatically read, extract, and organize the data -
+          no manual typing required. Supports English and Arabic documents.
+        </p>
+        <a href="http://localhost:5173" class="qmx-product-button" target="_blank" rel="noopener">
+          Try OCRDocFlow Demo →
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============ 3) STYLES ============
+     Add this inside your site's <style> block, or as a separate CSS
+     file linked in <head>. Class names are prefixed "qmx-" to avoid
+     clashing with any existing styles on the site.
+-->
+<style>
+  .qmx-nav-link {
+    color: inherit;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: opacity 0.2s ease;
+  }
+  .qmx-nav-link:hover {
+    opacity: 0.7;
+  }
+
+  .qmx-products-section {
+    padding: 5rem 1.5rem;
+    background: #fafafa;
+  }
+  .qmx-products-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .qmx-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #6366f1;
+    margin-bottom: 0.75rem;
+  }
+  .qmx-heading {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem;
+    color: #111827;
+  }
+  .qmx-subheading {
+    color: #6b7280;
+    font-size: 1.05rem;
+    margin-bottom: 3rem;
+  }
+
+  .qmx-product-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.5rem;
+    text-align: left;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .qmx-product-icon {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    background: #eef2ff;
+    border-radius: 12px;
+  }
+  .qmx-product-content h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #111827;
+  }
+  .qmx-product-content p {
+    margin: 0 0 1.25rem;
+    color: #6b7280;
+    line-height: 1.6;
+  }
+  .qmx-product-button {
+    display: inline-block;
+    background: #6366f1;
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.65rem 1.4rem;
+    border-radius: 8px;
+    transition: background 0.2s ease;
+  }
+  .qmx-product-button:hover {
+    background: #4f46e5;
+  }
+
+  @media (max-width: 600px) {
+    .qmx-product-card {
+      flex-direction: column;
+      text-align: center;
+      align-items: center;
+    }
+  }
+</style>

@@ -1,0 +1,120 @@
+"""
+This is the "reading" engine for OCRDocFlow.
+
+Flow for one document:
+  PDF or image file
+      -> (if PDF) render each page as an image
+      -> clean up the image (upscale, contrast, sharpen) - helps a lot
+         with handwritten or lower-quality phone-scanned documents
+      -> run PaddleOCR on each cleaned-up image
+      -> combine all recognized text into one block
+
+PaddleOCR models are loaded once per language and reused (loading them is
+slow - we don't want to reload them on every single upload).
+"""
+
+import fitz  # PyMuPDF - reads PDF files
+from PIL import Image, ImageOps, ImageFilter
+import numpy as np
+from paddleocr import PaddleOCR
+
+# Cache of loaded OCR engines, keyed by language code, so we only pay the
+# (slow) model-loading cost once per language, not once per document.
+_ocr_engines: dict[str, PaddleOCR] = {}
+
+# Maps our simple frontend dropdown values to PaddleOCR's language codes.
+SUPPORTED_LANGUAGES = {
+    "en": "en",
+    "ar": "ar",
+}
+
+# --- Preprocessing settings -------------------------------------------------
+# If a page image is narrower than this, we scale it up before OCR.
+# Handwriting especially benefits from more pixels per character.
+# Capped so we don't blow up memory on already-large scans.
+_MIN_WIDTH_FOR_OCR = 1600
+_MAX_UPSCALE_FACTOR = 2.0
+
+
+def _preprocess_image(image: Image.Image) -> Image.Image:
+    """
+    Light, safe image cleanup before OCR. Kept intentionally simple so it
+    stays fast and low-memory on our capped WSL environment (no heavy
+    libraries, no new model downloads).
+    """
+    # 1) Upscale small images so there are more pixels per handwritten
+    #    stroke for PaddleOCR to work with.
+    if image.width < _MIN_WIDTH_FOR_OCR:
+        factor = min(_MAX_UPSCALE_FACTOR, _MIN_WIDTH_FOR_OCR / image.width)
+        new_size = (int(image.width * factor), int(image.height * factor))
+        image = image.resize(new_size, Image.LANCZOS)
+
+    # 2) Auto-contrast: stretches the darkest/lightest pixels to use the
+    #    full range, which helps faint pencil/pen marks stand out.
+    image = ImageOps.autocontrast(image, cutoff=1)
+
+    # 3) A light sharpen pass to make handwriting edges crisper.
+    image = image.filter(ImageFilter.SHARPEN)
+
+    return image
+
+
+def _pdf_to_images(file_path: str) -> list[Image.Image]:
+    images = []
+    pdf = fitz.open(file_path)
+    for page in pdf:
+        # Render at ~200 DPI - good balance of OCR accuracy vs speed/memory
+        pix = page.get_pixmap(matrix=fitz.Matrix(200 / 72, 200 / 72))
+        img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+        images.append(img)
+    pdf.close()
+    return images
+
+
+def _get_engine(language: str) -> PaddleOCR:
+    lang_code = SUPPORTED_LANGUAGES.get(language, "en")
+    if lang_code not in _ocr_engines:
+        _ocr_engines[lang_code] = PaddleOCR(
+            use_angle_cls=True,
+            lang=lang_code,
+            show_log=False,
+            # These two settings make text DETECTION more sensitive - helps
+            # catch small numbers (like table quantities) that sit close to
+            # table border lines, which the default settings can mistake
+            # for part of the table structure rather than text.
+            # Trade-off: slightly more likely to pick up a stray mark as
+            # "text" - an acceptable trade since a human will review the
+            # extracted data later anyway.
+            det_db_box_thresh=0.3,   # default 0.6 - lower = more sensitive
+            det_db_unclip_ratio=2.0,  # default 1.5 - larger = wider detected boxes
+        )
+    return _ocr_engines[lang_code]
+
+
+def extract_text(file_path: str, real_type: str, language: str) -> tuple[str, int]:
+    """
+    Returns (extracted_text, page_count).
+    Raises an exception if OCR fails - the caller is responsible for
+    catching it and marking the document as "failed".
+    """
+    if real_type == "pdf":
+        images = _pdf_to_images(file_path)
+    else:
+        images = [Image.open(file_path).convert("RGB")]
+
+    engine = _get_engine(language)
+    all_text_parts = []
+
+    for page_number, image in enumerate(images, start=1):
+        image = _preprocess_image(image)
+        result = engine.ocr(np.array(image), cls=True)
+        page_lines = []
+        # PaddleOCR result shape: list (per image) of list of [box, (text, confidence)]
+        for line in result[0] or []:
+            recognized_text = line[1][0]
+            page_lines.append(recognized_text)
+        if page_lines:
+            all_text_parts.append(f"--- Page {page_number} ---\n" + "\n".join(page_lines))
+
+    full_text = "\n\n".join(all_text_parts)
+    return full_text, len(images)
