@@ -9,11 +9,10 @@ app = FastAPI(title="OCRDocFlow API", version="0.1.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS: allows the React frontend (running on a different port) to call this API.
-# In production, replace "*" with your real frontend domain only.
+# CORS: allows the React frontend (running on a different port/domain) to call this API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "https://ocrdocflow.qumaxa.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

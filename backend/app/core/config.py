@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     MAX_PDF_PAGES: int = 10
     UPLOAD_DIR: str = "./uploaded_files"
 
+    # Where Stripe redirects the browser back to after checkout - and any
+    # other place the backend needs to build a link back to the frontend.
+    FRONTEND_URL: str = "http://localhost:5173"
+
     # Stripe (test mode keys while developing - Section 22, never
     # hardcoded, always loaded from .env)
     STRIPE_SECRET_KEY: str = ""

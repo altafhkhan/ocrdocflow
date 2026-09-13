@@ -53,7 +53,7 @@ PLAN_PRICE_IDS = {
 }
 
 # Where Stripe sends the browser back to after checkout completes/cancels.
-FRONTEND_URL = "http://localhost:5173"
+FRONTEND_URL = settings.FRONTEND_URL
 
 
 class CheckoutRequest(BaseModel):
