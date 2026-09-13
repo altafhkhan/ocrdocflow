@@ -8,7 +8,14 @@
 name: ocrdocflow
 
 services:
-  api:
+  # Named "ocrdocflow-api", not "api" - Compose registers the service
+  # name as a network alias, and Console's own service on this shared
+  # network is ALSO named "api". Two services with the same name on one
+  # network make that alias resolve to either container nondeterministically
+  # (confirmed: `getent hosts api` flipped between both IPs on the running
+  # droplet) - console.qumaxa.com would intermittently proxy to this
+  # container instead of its own. Keep this name distinct.
+  ocrdocflow-api:
     container_name: ocrdocflow-api
     build:
       context: ../backend
