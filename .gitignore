@@ -18,6 +18,7 @@ pnpm-debug.log*
 dist/
 build/
 .vite/
+*.tsbuildinfo
 
 ReviewModal_old.tsx
 

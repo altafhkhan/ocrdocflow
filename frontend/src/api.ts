@@ -1,4 +1,6 @@
-const API_BASE = "http://localhost:8000";
+// In production, nginx serves the frontend and proxies /api/* to the
+// backend on the same origin, so no base URL (and no CORS) is needed there.
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 export function getToken() {
   return localStorage.getItem("token");
