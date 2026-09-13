@@ -1,0 +1,35 @@
+# Deploys OCRDocFlow's API alongside the existing AR Automation Console
+# on the same droplet, reusing its nginx/certbot setup rather than
+# running a second nginx (see ../DEPLOY.md and console/deploy/DEPLOY.md).
+# Postgres is Neon (external, managed) - no db container here.
+#
+# Run from this deploy/ directory: docker compose up -d --build
+
+name: ocrdocflow
+
+services:
+  api:
+    container_name: ocrdocflow-api
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../backend/.env
+    volumes:
+      - uploaded-files:/app/uploaded_files
+    expose:
+      - "8000"
+    networks:
+      - deploy_default
+
+volumes:
+  uploaded-files:
+
+networks:
+  # The Console's existing docker-compose project network (created as
+  # "deploy_default" because its compose files live in a directory named
+  # "deploy") - joining it lets its nginx container reach this api
+  # service by name without publishing our port to the public host.
+  deploy_default:
+    external: true

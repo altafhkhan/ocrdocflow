@@ -1,0 +1,33 @@
+# Step 2 config — activate only after certbot has successfully issued a
+# certificate for ocrdocflow.qumaxa.com (see ../DEPLOY.md). Rename to
+# ocrdocflow-ssl.conf and restart nginx.
+#
+# This file gets copied into the Console's nginx conf.d directory on the
+# droplet (/opt/console/deploy/nginx/) - the two products share one
+# nginx/certbot setup. See ../DEPLOY.md.
+
+server {
+    listen 443 ssl;
+    server_name ocrdocflow.qumaxa.com;
+
+    ssl_certificate     /etc/letsencrypt/live/ocrdocflow.qumaxa.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ocrdocflow.qumaxa.com/privkey.pem;
+
+    # Matches backend's MAX_UPLOAD_SIZE_MB=10 (app/core/config.py) plus
+    # headroom for multipart overhead - nginx's 1MB default would
+    # otherwise reject uploads the backend is willing to accept.
+    client_max_body_size 12m;
+
+    location /api/ {
+        proxy_pass http://ocrdocflow-api:8000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        root /var/www/ocrdocflow;
+        try_files $uri /index.html;
+    }
+}
