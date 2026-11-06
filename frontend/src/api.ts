@@ -358,9 +358,26 @@ export interface PlanInfo {
   name: string;
   price_usd: number;
   invoices_per_month: number;
+  // Present only while the launch promotion is running.
+  promo_price_usd?: number;
 }
 
-export async function getPlans(): Promise<Record<string, PlanInfo>> {
+export interface PromoInfo {
+  name: string;
+  percent_off: number;
+  seats_total: number;
+  seats_left: number;
+  duration: "forever" | "once" | "repeating";
+  duration_in_months: number | null;
+  ends_at: string | null; // ISO date, or null when there is no end date
+}
+
+export interface PlansResponse {
+  plans: Record<string, PlanInfo>;
+  promo: PromoInfo | null;
+}
+
+export async function getPlans(): Promise<PlansResponse> {
   const res = await fetch(`${API_BASE}/api/v1/billing/plans`);
   if (!res.ok) throw new Error("Could not load plans.");
   return res.json();

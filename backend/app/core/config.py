@@ -47,6 +47,21 @@ class Settings(BaseSettings):
     AZURE_DI_ENDPOINT: str = ""
     AZURE_DI_KEY: str = ""
 
+    # --- Launch promotion (see api/v1/billing.py) ---
+    # A Stripe coupon is created once (found again by metadata) and applied
+    # automatically at checkout while seats remain. Stripe itself enforces
+    # the seat limit and the end date.
+    PROMO_ENABLED: bool = True
+    PROMO_NAME: str = "Launch offer"
+    PROMO_PERCENT_OFF: int = 50
+    PROMO_MAX_REDEMPTIONS: int = 50
+    # "forever" (every invoice of the subscription), "once" (first invoice
+    # only) or "repeating" (PROMO_DURATION_MONTHS invoices).
+    PROMO_DURATION: str = "forever"
+    PROMO_DURATION_MONTHS: int = 3
+    # Optional ISO date (e.g. 2026-12-31) after which the offer stops.
+    PROMO_ENDS_AT: str = ""
+
     class Config:
         env_file = ".env"
 
