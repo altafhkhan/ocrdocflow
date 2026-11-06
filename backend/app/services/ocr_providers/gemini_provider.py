@@ -39,6 +39,9 @@ _PROMPT = (
     "character. Never round, reformat or correct them.\n"
     "- Keep the original language and script (do not translate). Right-to-left "
     "text must be written in normal logical order.\n"
+    "- For Arabic/Urdu/Persian pages read each line right-to-left: write the label "
+    "first and its value after it (e.g. 'رقم الفاتورة: INV-2201'), and write table "
+    "rows starting from the right-most column.\n"
     "- If a word is unreadable write [?] in its place.\n"
     "- If the page has no text, output exactly: [no text]\n"
     "The document language is expected to be {language}, but transcribe whatever "
@@ -58,7 +61,7 @@ def _image_to_jpeg_b64(image: Image.Image, max_side: int = 2000) -> str:
 class GeminiProvider(OCRProvider):
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash", timeout: int = 120):
+    def __init__(self, api_key: str, model: str = "gemini-3.6-flash", timeout: int = 180):
         if not api_key:
             raise OCRProviderError("GEMINI_API_KEY is not set")
         self.api_key = api_key
@@ -74,12 +77,27 @@ class GeminiProvider(OCRProvider):
                     {"text": _PROMPT.format(language=_LANGUAGE_NAMES.get(language, language))},
                 ]
             }],
-            "generationConfig": {"temperature": 0.0, "maxOutputTokens": 8192},
+            "generationConfig": {
+                "temperature": 0.0,
+                "maxOutputTokens": 8192,
+                # Transcription needs no long "thinking" phase; keeping it low
+                # makes responses fast and avoids read timeouts.
+                "thinkingConfig": {"thinkingLevel": "low"},
+            },
         }
-        # Simple retry for free-tier rate limiting (HTTP 429) and transient 5xx.
+        # Simple retry for free-tier rate limiting (HTTP 429), transient 5xx
+        # and network timeouts.
         delay = 5
+        resp = None
         for attempt in range(4):
-            resp = requests.post(url, json=body, headers={"x-goog-api-key": self.api_key}, timeout=self.timeout)
+            try:
+                resp = requests.post(url, json=body, headers={"x-goog-api-key": self.api_key}, timeout=self.timeout)
+            except requests.RequestException as e:
+                if attempt == 3:
+                    raise OCRProviderError(f"Gemini request failed: {e}") from e
+                time.sleep(delay)
+                delay *= 2
+                continue
             if resp.status_code in (429, 500, 502, 503) and attempt < 3:
                 time.sleep(delay)
                 delay *= 2

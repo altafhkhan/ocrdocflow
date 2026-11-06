@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # instead of failing the upload.
     OCR_FALLBACK_TO_PADDLE: bool = True
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     AZURE_DI_ENDPOINT: str = ""
     AZURE_DI_KEY: str = ""
 

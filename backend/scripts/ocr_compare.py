@@ -104,6 +104,7 @@ def main() -> int:
     ap.add_argument("--samples", default=str(SAMPLES_DIR))
     ap.add_argument("--only", default="", help="substring filter on sample file names")
     ap.add_argument("--list-models", action="store_true")
+    ap.add_argument("--out", default=str(OUT_DIR), help="output folder (default backend/ocr_eval)")
     args = ap.parse_args()
 
     env = load_env(BACKEND_DIR / ".env")
@@ -117,7 +118,7 @@ def main() -> int:
             providers[name] = build_provider(
                 name,
                 api_key=env.get("GEMINI_API_KEY", "") if name == "gemini" else env.get("AZURE_DI_KEY", ""),
-                model=env.get("GEMINI_MODEL") or "gemini-2.5-flash",
+                model=env.get("GEMINI_MODEL") or "gemini-3.6-flash",
                 endpoint=env.get("AZURE_DI_ENDPOINT", ""),
             )
         except Exception as e:  # missing key etc.
@@ -132,7 +133,8 @@ def main() -> int:
         print(f"No samples in {args.samples}. Drop PDF/PNG/JPG files there.")
         return 1
 
-    OUT_DIR.mkdir(exist_ok=True)
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
     for sample in samples:
         images = page_images(sample)
@@ -147,7 +149,7 @@ def main() -> int:
             except OCRProviderError as e:
                 text, err = "", str(e)
             secs = time.time() - t0
-            (OUT_DIR / f"{sample.stem}.{name}.txt").write_text(text, encoding="utf-8")
+            (out_dir / f"{sample.stem}.{name}.txt").write_text(text, encoding="utf-8")
             cer = wer = None
             if truth and text:
                 cer, wer = error_rates(text, truth)
@@ -161,8 +163,8 @@ def main() -> int:
     for s, n, pg, secs, chars, cer, wer, err in rows:
         f = lambda v: "" if v is None else f"{v:.1%}"
         lines.append(f"| {s} | {n} | {pg} | {secs:.1f} | {chars} | {f(cer)} | {f(wer)} | {err[:80]} |")
-    (OUT_DIR / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"\nOutputs in {OUT_DIR}  (report.md + one .txt per sample/engine)")
+    (out_dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"\nOutputs in {out_dir}  (report.md + one .txt per sample/engine)")
     return 0
 
 

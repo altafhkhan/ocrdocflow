@@ -26,7 +26,7 @@ def build_provider(name: str, **kwargs) -> OCRProvider:
         return PaddleProvider()
     if name == "gemini":
         from .gemini_provider import GeminiProvider
-        return GeminiProvider(api_key=kwargs.get("api_key", ""), model=kwargs.get("model") or "gemini-2.5-flash")
+        return GeminiProvider(api_key=kwargs.get("api_key", ""), model=kwargs.get("model") or "gemini-3.6-flash")
     if name == "azure":
         from .azure_provider import AzureReadProvider
         return AzureReadProvider(endpoint=kwargs.get("endpoint", ""), api_key=kwargs.get("api_key", ""))
