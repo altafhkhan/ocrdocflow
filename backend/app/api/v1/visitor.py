@@ -207,12 +207,12 @@ async def visitor_upload(
     db.refresh(document)
 
     try:
-        text, page_count = ocr_service.extract_text(stored_path, real_type, language)
+        text, page_count, invoices = ocr_service.extract_document(stored_path, real_type, language)
         document.ocr_text = text
         document.page_count = page_count
         document.status = "done"
         try:
-            invoices_found = field_extractor.parse_invoices_from_text(text)
+            invoices_found = invoices if invoices is not None else field_extractor.parse_invoices_from_text(text)
             for invoice_index, parsed in enumerate(invoices_found):
                 db.add(ExtractedInvoiceHeader(
                     document_id=document.id, invoice_index=invoice_index, **parsed["header"],

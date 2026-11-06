@@ -152,7 +152,7 @@ async def upload_document(
     # A real production system would hand this off to a background job queue
     # so the upload request returns instantly - that's a later improvement.
     try:
-        text, page_count = ocr_service.extract_text(stored_path, real_type, language)
+        text, page_count, invoices = ocr_service.extract_document(stored_path, real_type, language)
         document.ocr_text = text
         document.page_count = page_count
         document.status = "done"
@@ -168,7 +168,10 @@ async def upload_document(
         # text is still useful on its own. We DO log it though, so we can
         # actually see and fix real bugs instead of silently losing them.
         try:
-            invoices_found = field_extractor.parse_invoices_from_text(text)
+            # The Gemini engine returns the invoice fields itself (it reads the
+            # page image, which beats regex rules over OCR text); otherwise
+            # fall back to the rule-based extractor.
+            invoices_found = invoices if invoices is not None else field_extractor.parse_invoices_from_text(text)
             # Billing/usage counts INVOICES, not pages (product decision -
             # a page can hold multiple invoices, or one invoice can span
             # several pages).

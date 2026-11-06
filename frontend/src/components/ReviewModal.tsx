@@ -70,6 +70,35 @@ const TRANSLATIONS = {
     saving: "جارٍ الحفظ...",
     loading: "جارٍ التحميل...",
   },
+  ur: {
+    title: "نکالا گیا ڈیٹا چیک کریں",
+    subtitle: "نیچے دیے گئے خانے چیک کریں اور محفوظ کرنے سے پہلے غلطیاں درست کریں۔",
+    invoiceOf: (i: number, n: number) => `انوائس ${i} از ${n}`,
+    back: "→ پچھلا",
+    next: "اگلا ←",
+    alreadySaved: "یہ انوائس پہلے ہی محفوظ ہو چکی ہے۔ آپ اسے دوبارہ ترمیم کر کے محفوظ کر سکتے ہیں۔",
+    warningsTitle: (n: number) => `محفوظ ہو گیا - براہ کرم ${n === 1 ? "یہ" : "یہ سب"} دوبارہ چیک کریں:`,
+    invoiceNumber: "انوائس نمبر",
+    currency: "کرنسی",
+    invoiceDate: "انوائس کی تاریخ",
+    dueDate: "ادائیگی کی آخری تاریخ",
+    clientName: "گاہک کا نام",
+    clientCompany: "گاہک کی کمپنی",
+    clientEmail: "گاہک کا ای میل",
+    lineItems: "اشیاء کی تفصیل",
+    description: "تفصیل",
+    qty: "مقدار",
+    unitPrice: "فی یونٹ قیمت",
+    totalPrice: "کل قیمت",
+    subTotal: "ذیلی میزان",
+    tax: "ٹیکس",
+    discount: "رعایت",
+    grandTotal: "کل میزان",
+    cancel: "منسوخ",
+    save: "محفوظ کریں",
+    saving: "محفوظ ہو رہا ہے...",
+    loading: "لوڈ ہو رہا ہے...",
+  },
 };
 
 // Small reusable labeled input - keeps the form below readable instead of
@@ -107,9 +136,9 @@ export default function ReviewModal({ documentId, language, onClose, onSaved }: 
   const [error, setError] = useState("");
   const [warnings, setWarnings] = useState<ValidationWarning[]>([]);
 
-  // Arabic and Urdu are both right-to-left; only Arabic has translated labels.
+  // Arabic and Urdu are both right-to-left and have their own labels.
   const isRTL = language === "ar" || language === "ur";
-  const t = TRANSLATIONS[language === "ar" ? "ar" : "en"];
+  const t = TRANSLATIONS[language === "ar" ? "ar" : language === "ur" ? "ur" : "en"];
 
   useEffect(() => {
     setLoading(true);

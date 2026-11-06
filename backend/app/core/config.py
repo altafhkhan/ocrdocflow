@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     OCR_FALLBACK_TO_PADDLE: bool = True
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.6-flash"
+    # Tried in order when the main model answers 429 (quota) or 503 (busy);
+    # each free-tier model has its own daily quota.
+    GEMINI_FALLBACK_MODELS: str = "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite"
     AZURE_DI_ENDPOINT: str = ""
     AZURE_DI_KEY: str = ""
 

@@ -64,6 +64,7 @@ def get_provider(name: str | None = None) -> OCRProvider:
             name,
             api_key=settings.GEMINI_API_KEY if name == "gemini" else settings.AZURE_DI_KEY,
             model=settings.GEMINI_MODEL,
+            fallback_models=settings.GEMINI_FALLBACK_MODELS,
             endpoint=settings.AZURE_DI_ENDPOINT,
         )
     return _providers[name]
@@ -78,19 +79,37 @@ def join_pages(pages: list[str]) -> str:
     return "\n\n".join(parts)
 
 
-def extract_text(file_path: str, real_type: str, language: str) -> tuple[str, int]:
+def extract_document(file_path: str, real_type: str, language: str) -> tuple[str, int, list[dict] | None]:
     """
-    Returns (extracted_text, page_count).
+    Returns (extracted_text, page_count, invoices).
+
+    `invoices` is a list in field_extractor's {"header", "items"} shape when
+    the engine understood the document itself (Gemini does this in the same
+    request as the OCR), or None when the caller should run the rule-based
+    field_extractor over the text instead (PaddleOCR / Azure).
+
     Raises an exception if OCR fails - the caller is responsible for
     catching it and marking the document as "failed".
     """
     images = load_page_images(file_path, real_type)
     name = (settings.OCR_PROVIDER or "paddle").lower()
+    invoices = None
     try:
-        pages = get_provider(name).extract_pages(images, language)
+        provider = get_provider(name)
+        if hasattr(provider, "extract_document"):
+            pages, invoices = provider.extract_document(images, language)
+        else:
+            pages = provider.extract_pages(images, language)
     except OCRProviderError as e:
         if name == "paddle" or not settings.OCR_FALLBACK_TO_PADDLE:
             raise
         logger.warning("OCR provider %s failed (%s); falling back to paddle", name, e)
         pages = get_provider("paddle").extract_pages(images, language)
-    return join_pages(pages), len(images)
+        invoices = None
+    return join_pages(pages), len(images), invoices
+
+
+def extract_text(file_path: str, real_type: str, language: str) -> tuple[str, int]:
+    """Text-only variant kept for existing callers and scripts."""
+    text, page_count, _ = extract_document(file_path, real_type, language)
+    return text, page_count

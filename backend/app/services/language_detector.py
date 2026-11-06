@@ -18,11 +18,14 @@ import re
 
 _ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
+# Letters that exist in Urdu but not in Arabic (ٹ ڈ ڑ ں ے ہ). If a page in
+# Arabic script uses any of them it is (almost certainly) Urdu.
+_URDU_ONLY_RE = re.compile(r"[ٹڈڑںےہ]")
 
 
 def detect_script_language(text: str) -> str | None:
     """
-    Returns "ar", "en", or None (not enough alphabetic text to judge -
+    Returns "ur", "ar", "en", or None (not enough alphabetic text to judge -
     e.g. a document that's mostly numbers/tables).
     """
     if not text:
@@ -35,7 +38,9 @@ def detect_script_language(text: str) -> str | None:
     if total < 10:  # too little alphabetic text to judge confidently
         return None
 
-    return "ar" if arabic_count > latin_count else "en"
+    if arabic_count > latin_count:
+        return "ur" if _URDU_ONLY_RE.search(text) else "ar"
+    return "en"
 
 
 if __name__ == "__main__":
