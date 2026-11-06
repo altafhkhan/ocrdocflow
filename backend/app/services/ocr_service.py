@@ -85,12 +85,12 @@ def extract_text(file_path: str, real_type: str, language: str) -> tuple[str, in
     catching it and marking the document as "failed".
     """
     images = load_page_images(file_path, real_type)
-    provider = get_provider()
+    name = (settings.OCR_PROVIDER or "paddle").lower()
     try:
-        pages = provider.extract_pages(images, language)
+        pages = get_provider(name).extract_pages(images, language)
     except OCRProviderError as e:
-        if provider.name == "paddle" or not settings.OCR_FALLBACK_TO_PADDLE:
+        if name == "paddle" or not settings.OCR_FALLBACK_TO_PADDLE:
             raise
-        logger.warning("OCR provider %s failed (%s); falling back to paddle", provider.name, e)
+        logger.warning("OCR provider %s failed (%s); falling back to paddle", name, e)
         pages = get_provider("paddle").extract_pages(images, language)
     return join_pages(pages), len(images)

@@ -11,7 +11,7 @@ from app.db.database import get_db
 from app.models.document import Document
 from app.models.extracted_invoice import ExtractedInvoiceHeader, ExtractedInvoiceItem
 from app.models.user import User
-from app.services import ocr_service, field_extractor, usage_service
+from app.services import ocr_service, field_extractor, usage_service, language_detector
 
 logger = logging.getLogger("ocrdocflow.documents")
 
@@ -156,6 +156,9 @@ async def upload_document(
         document.ocr_text = text
         document.page_count = page_count
         document.status = "done"
+        # Which script the text actually uses ("en"/"ar"/None) - drives the
+        # review modal's direction for "auto" uploads and the mismatch hint.
+        document.detected_language = language_detector.detect_script_language(text)
 
         # Phase 3: automatically attempt structured field extraction right
         # after OCR succeeds, and save a first-guess into the STAGING

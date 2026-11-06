@@ -107,8 +107,9 @@ export default function ReviewModal({ documentId, language, onClose, onSaved }: 
   const [error, setError] = useState("");
   const [warnings, setWarnings] = useState<ValidationWarning[]>([]);
 
-  const isRTL = language === "ar";
-  const t = TRANSLATIONS[isRTL ? "ar" : "en"];
+  // Arabic and Urdu are both right-to-left; only Arabic has translated labels.
+  const isRTL = language === "ar" || language === "ur";
+  const t = TRANSLATIONS[language === "ar" ? "ar" : "en"];
 
   useEffect(() => {
     setLoading(true);

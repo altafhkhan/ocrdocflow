@@ -10,14 +10,13 @@ interface DocRow {
   status: string;
   uploaded_at: string;
   language: string;
+  detected_language: string | null;
 }
 
 interface DocDetail extends DocRow {
   ocr_text: string | null;
   page_count: number | null;
   error_message: string | null;
-  language: string;
-  detected_language: string | null;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -35,7 +34,7 @@ const UPLOAD_STAGES = [
 
 export default function Dashboard() {
   const [docs, setDocs] = useState<DocRow[]>([]);
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState("auto");
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
   const [stageIndex, setStageIndex] = useState(0);
@@ -212,8 +211,10 @@ export default function Dashboard() {
             className="border rounded px-3 py-2 mb-4 w-full"
             disabled={uploading}
           >
+            <option value="auto">Auto-detect</option>
             <option value="en">English</option>
             <option value="ar">Arabic</option>
+            <option value="ur">Urdu</option>
           </select>
 
           <label
@@ -253,7 +254,7 @@ export default function Dashboard() {
         {message && (
           <div className="flex items-center gap-3 mb-4">
             <p className="text-sm text-blue-700">{message}</p>
-            {lastFile && !uploading && lastDetectedLanguage && lastDetectedLanguage !== language && (
+            {lastFile && !uploading && language !== "auto" && lastDetectedLanguage && lastDetectedLanguage !== language && (
               <button
                 onClick={handleRetryWithDifferentLanguage}
                 className="text-xs text-purple-600 hover:underline whitespace-nowrap"
@@ -322,7 +323,7 @@ export default function Dashboard() {
                         <button
                           onClick={() => {
                             setReviewingDocId(d.id);
-                            setReviewingLanguage(d.language);
+                            setReviewingLanguage(d.language === "auto" ? d.detected_language ?? "en" : d.language);
                           }}
                           className="text-purple-600 hover:underline text-xs"
                         >
@@ -371,6 +372,7 @@ export default function Dashboard() {
                   {viewingDoc.page_count} page(s) - language: {viewingDoc.language}
                 </p>
                 {viewingDoc.detected_language &&
+                  viewingDoc.language !== "auto" &&
                   viewingDoc.detected_language !== viewingDoc.language && (
                     <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
                       ⚠ You selected "{viewingDoc.language}", but this document's text looks like

@@ -21,7 +21,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 export default function VisitorPage() {
   const [docs, setDocs] = useState<DocRow[]>([]);
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState("auto");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -144,8 +144,10 @@ export default function VisitorPage() {
             className="border rounded px-3 py-2 mb-4 w-full"
             disabled={uploading}
           >
+            <option value="auto">Auto-detect</option>
             <option value="en">English</option>
             <option value="ar">Arabic</option>
+            <option value="ur">Urdu</option>
           </select>
 
           <label
