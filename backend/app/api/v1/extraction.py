@@ -172,7 +172,6 @@ def confirm_extraction(
         .filter(Invoice.document_id == doc.id, Invoice.invoice_index == invoice_index)
         .first()
     )
-    is_new = invoice is None
     if invoice is None:
         invoice = Invoice(document_id=doc.id, invoice_index=invoice_index, user_id=current_user.id)
         db.add(invoice)
@@ -236,9 +235,12 @@ def confirm_extraction(
     items_list = [{"total_price": item.total_price} for item in payload.items]
 
     warnings = invoice_validator.validate_invoice(header_dict, items_list)
+    # The invoice we just saved is already in the table at this point, so it
+    # must always be excluded - otherwise every FIRST save warns about
+    # being a duplicate of itself.
     warnings += check_duplicate_invoice(
         db, current_user.id, invoice.invoice_number,
-        exclude_invoice_id=None if is_new else invoice.id,
+        exclude_invoice_id=invoice.id,
     )
 
     return {
