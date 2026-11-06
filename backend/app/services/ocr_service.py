@@ -4,56 +4,27 @@ This is the "reading" engine for OCRDocFlow.
 Flow for one document:
   PDF or image file
       -> (if PDF) render each page as an image
-      -> clean up the image (upscale, contrast, sharpen) - helps a lot
-         with handwritten or lower-quality phone-scanned documents
-      -> run PaddleOCR on each cleaned-up image
-      -> fix Arabic/Urdu character order (see _fix_rtl_line below)
-      -> combine all recognized text into one block
+      -> hand the page images to the configured OCR engine
+         (settings.OCR_PROVIDER: "paddle" local, "gemini" or "azure" cloud -
+          see app/services/ocr_providers/)
+      -> combine all recognized text into one block, with "--- Page N ---"
+         markers that field_extractor.py knows to skip
 
-PaddleOCR models are loaded once per language and reused (loading them is
-slow - we don't want to reload them on every single upload).
+If a cloud engine fails (network, quota...) and OCR_FALLBACK_TO_PADDLE is
+on, we fall back to the local PaddleOCR engine so an upload still works.
 """
+import logging
 
-import re
 import fitz  # PyMuPDF - reads PDF files
-from PIL import Image, ImageOps, ImageFilter
-import numpy as np
-from paddleocr import PaddleOCR
+from PIL import Image
 
-# Cache of loaded OCR engines, keyed by language code, so we only pay the
-# (slow) model-loading cost once per language, not once per document.
-_ocr_engines: dict[str, PaddleOCR] = {}
+from app.core.config import settings
+from app.services.ocr_providers import OCRProvider, OCRProviderError, build_provider
 
-# Maps our simple frontend dropdown values to PaddleOCR's language codes.
-SUPPORTED_LANGUAGES = {
-    "en": "en",
-    "ar": "ar",
-}
+logger = logging.getLogger(__name__)
 
-# --- Preprocessing settings -------------------------------------------------
-# If a page image is narrower than this, we scale it up before OCR.
-# Handwriting especially benefits from more pixels per character.
-# Capped so we don't blow up memory on already-large scans.
-_MIN_WIDTH_FOR_OCR = 1600
-_MAX_UPSCALE_FACTOR = 2.0
-
-# --- RTL fix -----------------------------------------------------------------
-# PaddleOCR's Arabic recognition model outputs each line's characters in
-# left-to-right VISUAL scan order, without reordering for Arabic's actual
-# right-to-left reading direction. The result: every Arabic word comes
-# out character-reversed (e.g. "فاتورة" becomes "ةروتاف"). Confirmed by
-# testing against real OCR output - simply reversing a line's characters
-# recovers correct, readable Arabic.
-# We only reverse lines that actually contain Arabic-range characters,
-# so purely Latin/numeric lines (amounts, currency codes, etc, which
-# PaddleOCR already outputs correctly) are left untouched.
-_ARABIC_CHAR_RE = re.compile(r"[\u0600-\u06FF]")
-
-
-def _fix_rtl_line(text: str) -> str:
-    if _ARABIC_CHAR_RE.search(text):
-        return text[::-1]
-    return text
+# Engines are built once and reused (PaddleOCR model loading is slow).
+_providers: dict[str, OCRProvider] = {}
 
 
 def get_pdf_page_count(file_path: str) -> int:
@@ -68,43 +39,43 @@ def get_pdf_page_count(file_path: str) -> int:
     return count
 
 
-def _preprocess_image(image: Image.Image) -> Image.Image:
-    """
-    Light, safe image cleanup before OCR. Kept intentionally simple so it
-    stays fast and low-memory on our capped WSL environment (no heavy
-    libraries, no new model downloads).
-    """
-    if image.width < _MIN_WIDTH_FOR_OCR:
-        factor = min(_MAX_UPSCALE_FACTOR, _MIN_WIDTH_FOR_OCR / image.width)
-        new_size = (int(image.width * factor), int(image.height * factor))
-        image = image.resize(new_size, Image.LANCZOS)
-
-    image = ImageOps.autocontrast(image, cutoff=1)
-    image = image.filter(ImageFilter.SHARPEN)
-
-    return image
-
-
-def _pdf_to_images(file_path: str) -> list[Image.Image]:
+def pdf_to_images(file_path: str, dpi: int = 200) -> list[Image.Image]:
     images = []
     pdf = fitz.open(file_path)
     for page in pdf:
-        # Render at ~200 DPI - good balance of OCR accuracy vs speed/memory
-        pix = page.get_pixmap(matrix=fitz.Matrix(200 / 72, 200 / 72))
+        # ~200 DPI - good balance of OCR accuracy vs speed/memory
+        pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72))
         img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
         images.append(img)
     pdf.close()
     return images
 
 
-def _get_engine(language: str) -> PaddleOCR:
-    lang_code = SUPPORTED_LANGUAGES.get(language, "en")
-    if lang_code not in _ocr_engines:
-        # Using PaddleOCR's default detection settings - well-tuned for
-        # clean printed text, which is our current focus (see product
-        # decision: handwriting support paused for now).
-        _ocr_engines[lang_code] = PaddleOCR(use_angle_cls=True, lang=lang_code, show_log=False)
-    return _ocr_engines[lang_code]
+def load_page_images(file_path: str, real_type: str) -> list[Image.Image]:
+    if real_type == "pdf":
+        return pdf_to_images(file_path)
+    return [Image.open(file_path).convert("RGB")]
+
+
+def get_provider(name: str | None = None) -> OCRProvider:
+    name = (name or settings.OCR_PROVIDER or "paddle").lower()
+    if name not in _providers:
+        _providers[name] = build_provider(
+            name,
+            api_key=settings.GEMINI_API_KEY if name == "gemini" else settings.AZURE_DI_KEY,
+            model=settings.GEMINI_MODEL,
+            endpoint=settings.AZURE_DI_ENDPOINT,
+        )
+    return _providers[name]
+
+
+def join_pages(pages: list[str]) -> str:
+    parts = []
+    for page_number, text in enumerate(pages, start=1):
+        text = (text or "").strip()
+        if text:
+            parts.append(f"--- Page {page_number} ---\n{text}")
+    return "\n\n".join(parts)
 
 
 def extract_text(file_path: str, real_type: str, language: str) -> tuple[str, int]:
@@ -113,24 +84,13 @@ def extract_text(file_path: str, real_type: str, language: str) -> tuple[str, in
     Raises an exception if OCR fails - the caller is responsible for
     catching it and marking the document as "failed".
     """
-    if real_type == "pdf":
-        images = _pdf_to_images(file_path)
-    else:
-        images = [Image.open(file_path).convert("RGB")]
-
-    engine = _get_engine(language)
-    all_text_parts = []
-
-    for page_number, image in enumerate(images, start=1):
-        image = _preprocess_image(image)
-        result = engine.ocr(np.array(image), cls=True)
-        page_lines = []
-        # PaddleOCR result shape: list (per image) of list of [box, (text, confidence)]
-        for line in result[0] or []:
-            recognized_text = _fix_rtl_line(line[1][0])
-            page_lines.append(recognized_text)
-        if page_lines:
-            all_text_parts.append(f"--- Page {page_number} ---\n" + "\n".join(page_lines))
-
-    full_text = "\n\n".join(all_text_parts)
-    return full_text, len(images)
+    images = load_page_images(file_path, real_type)
+    provider = get_provider()
+    try:
+        pages = provider.extract_pages(images, language)
+    except OCRProviderError as e:
+        if provider.name == "paddle" or not settings.OCR_FALLBACK_TO_PADDLE:
+            raise
+        logger.warning("OCR provider %s failed (%s); falling back to paddle", provider.name, e)
+        pages = get_provider("paddle").extract_pages(images, language)
+    return join_pages(pages), len(images)

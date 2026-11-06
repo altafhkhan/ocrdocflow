@@ -29,6 +29,20 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
 
+    # --- OCR engine (see app/services/ocr_providers/) ---
+    # "paddle" = local PaddleOCR (default, offline).
+    # "gemini" = Google Gemini API (needs GEMINI_API_KEY).
+    # "azure"  = Azure AI Document Intelligence read model
+    #            (needs AZURE_DI_ENDPOINT + AZURE_DI_KEY).
+    OCR_PROVIDER: str = "paddle"
+    # If a cloud engine errors out, retry the document with local PaddleOCR
+    # instead of failing the upload.
+    OCR_FALLBACK_TO_PADDLE: bool = True
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    AZURE_DI_ENDPOINT: str = ""
+    AZURE_DI_KEY: str = ""
+
     class Config:
         env_file = ".env"
 

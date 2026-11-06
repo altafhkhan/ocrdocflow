@@ -20,6 +20,9 @@ pymupdf==1.24.10
 Pillow==10.4.0
 numpy==1.26.4
 
+# --- Cloud OCR providers (Gemini / Azure) call plain REST ---
+requests==2.32.3
+
 alembic
 
 stripe

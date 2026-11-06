@@ -60,3 +60,6 @@ storage/
 *.pem
 *.key
 *.crt
+# OCR comparison inputs/outputs (real documents, never commit)
+backend/ocr_samples/
+backend/ocr_eval/
