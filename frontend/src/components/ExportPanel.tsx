@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { downloadCsv } from "../api";
+import { LANGUAGES } from "../languages";
 
 export default function ExportPanel() {
   const today = new Date().toISOString().slice(0, 10);
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [language, setLanguage] = useState("en");
+  const [documentLanguage, setDocumentLanguage] = useState("all");
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
@@ -14,7 +16,7 @@ export default function ExportPanel() {
     setDownloading(true);
     setError("");
     try {
-      await downloadCsv(startDate, endDate, language);
+      await downloadCsv(startDate, endDate, language, documentLanguage);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -62,17 +64,33 @@ export default function ExportPanel() {
             </label>
           </div>
 
-          <label className="block text-sm mb-4">
-            <span className="block text-gray-600 mb-1">Invoice language</span>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="w-full border rounded px-3 py-2"
-            >
-              <option value="en">English</option>
-              <option value="ar">Arabic</option>
-            </select>
-          </label>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <label className="block text-sm">
+              <span className="block text-gray-600 mb-1">Invoice language</span>
+              <select
+                value={documentLanguage}
+                onChange={(e) => setDocumentLanguage(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="all">All languages</option>
+                {LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>{l.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="block text-gray-600 mb-1">Column headings in</span>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>{l.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
 

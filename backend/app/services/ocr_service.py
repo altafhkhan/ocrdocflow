@@ -79,9 +79,14 @@ def join_pages(pages: list[str]) -> str:
     return "\n\n".join(parts)
 
 
-def extract_document(file_path: str, real_type: str, language: str) -> tuple[str, int, list[dict] | None]:
+def extract_document(file_path: str, real_type: str, language: str
+                     ) -> tuple[str, int, list[dict] | None, str | None]:
     """
-    Returns (extracted_text, page_count, invoices).
+    Returns (extracted_text, page_count, invoices, detected_language).
+
+    `detected_language` is the engine's own opinion of the document's
+    language (two-letter code) when it has one, else None and the caller
+    should fall back to language_detector (script-based).
 
     `invoices` is a list in field_extractor's {"header", "items"} shape when
     the engine understood the document itself (Gemini does this in the same
@@ -94,10 +99,11 @@ def extract_document(file_path: str, real_type: str, language: str) -> tuple[str
     images = load_page_images(file_path, real_type)
     name = (settings.OCR_PROVIDER or "paddle").lower()
     invoices = None
+    detected = None
     try:
         provider = get_provider(name)
         if hasattr(provider, "extract_document"):
-            pages, invoices = provider.extract_document(images, language)
+            pages, invoices, detected = provider.extract_document(images, language)
         else:
             pages = provider.extract_pages(images, language)
     except OCRProviderError as e:
@@ -106,10 +112,11 @@ def extract_document(file_path: str, real_type: str, language: str) -> tuple[str
         logger.warning("OCR provider %s failed (%s); falling back to paddle", name, e)
         pages = get_provider("paddle").extract_pages(images, language)
         invoices = None
-    return join_pages(pages), len(images), invoices
+        detected = None
+    return join_pages(pages), len(images), invoices, detected
 
 
 def extract_text(file_path: str, real_type: str, language: str) -> tuple[str, int]:
     """Text-only variant kept for existing callers and scripts."""
-    text, page_count, _ = extract_document(file_path, real_type, language)
+    text, page_count, _, _ = extract_document(file_path, real_type, language)
     return text, page_count

@@ -13,6 +13,7 @@ from app.models.document import Document
 from app.models.extracted_invoice import ExtractedInvoiceHeader, ExtractedInvoiceItem
 from app.models.user import User
 from app.services import ocr_service, field_extractor, usage_service, language_detector
+from app.services.csv_headers import SUPPORTED_LANGUAGES
 
 logger = logging.getLogger("ocrdocflow.documents")
 
@@ -153,13 +154,18 @@ async def upload_document(
     # A real production system would hand this off to a background job queue
     # so the upload request returns instantly - that's a later improvement.
     try:
-        text, page_count, invoices = ocr_service.extract_document(stored_path, real_type, language)
+        text, page_count, invoices, detected = ocr_service.extract_document(stored_path, real_type, language)
         document.ocr_text = text
         document.page_count = page_count
         document.status = "done"
-        # Which script the text actually uses ("en"/"ar"/None) - drives the
-        # review modal's direction for "auto" uploads and the mismatch hint.
-        document.detected_language = language_detector.detect_script_language(text)
+        # The document's real language: the OCR engine's answer when it is
+        # one we support (Gemini can tell French from German), otherwise a
+        # script-based guess. Drives the review screen's labels/direction
+        # for "auto" uploads and the language-mismatch hint.
+        if detected in SUPPORTED_LANGUAGES:
+            document.detected_language = detected
+        else:
+            document.detected_language = language_detector.detect_script_language(text)
 
         # Phase 3: automatically attempt structured field extraction right
         # after OCR succeeds, and save a first-guess into the STAGING

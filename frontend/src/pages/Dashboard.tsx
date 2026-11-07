@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { UPLOAD_LANGUAGES } from "../languages";
 import { uploadDocument, listDocuments, getDocument, getToken, getMe, CurrentUser } from "../api";
 import { useNavigate } from "react-router-dom";
 import ReviewModal from "../components/ReviewModal";
@@ -211,17 +212,9 @@ export default function Dashboard() {
             className="border rounded px-3 py-2 mb-4 w-full"
             disabled={uploading}
           >
-            <option value="auto">Auto-detect</option>
-            <option value="en">English</option>
-            <option value="ar">Arabic</option>
-            <option value="ur">Urdu</option>
-            <option value="fr">French</option>
-            <option value="de">German</option>
-            <option value="es">Spanish</option>
-            <option value="nl">Dutch</option>
-            <option value="zh">Chinese</option>
-            <option value="ja">Japanese</option>
-            <option value="ko">Korean</option>
+            {UPLOAD_LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
           </select>
 
           <label

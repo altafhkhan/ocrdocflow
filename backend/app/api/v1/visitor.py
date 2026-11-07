@@ -39,6 +39,7 @@ from app.models.document import Document
 from app.models.visitor import VisitorUsage
 from app.models.extracted_invoice import ExtractedInvoiceHeader, ExtractedInvoiceItem
 from app.services import ocr_service, field_extractor
+from app.services.csv_headers import CSV_HEADERS
 from app.api.v1.documents import detect_real_file_type
 
 logger = logging.getLogger("ocrdocflow.visitor")
@@ -207,7 +208,7 @@ async def visitor_upload(
     db.refresh(document)
 
     try:
-        text, page_count, invoices = ocr_service.extract_document(stored_path, real_type, language)
+        text, page_count, invoices, _detected = ocr_service.extract_document(stored_path, real_type, language)
         document.ocr_text = text
         document.page_count = page_count
         document.status = "done"
@@ -348,19 +349,7 @@ def visitor_csv(
     """
     ip = _get_client_ip(request)
 
-    headers_en = [
-        "Invoice Number", "Invoice Date", "Due Date", "Currency",
-        "Client Name", "Client Company", "Client Email",
-        "Item Description", "Qty", "Unit Price", "Total Price",
-        "Sub-Total", "Tax", "Discount", "Grand Total",
-    ]
-    headers_ar = [
-        "رقم الفاتورة", "تاريخ الفاتورة", "تاريخ الاستحقاق", "العملة",
-        "اسم العميل", "اسم الشركة", "البريد الإلكتروني",
-        "الوصف", "الكمية", "سعر الوحدة", "السعر الإجمالي",
-        "المجموع الفرعي", "الضريبة", "الخصم", "الإجمالي الكلي",
-    ]
-    headers = headers_ar if language == "ar" else headers_en
+    headers = CSV_HEADERS.get(language, CSV_HEADERS["en"])
 
     doc_ids = [
         row[0] for row in (

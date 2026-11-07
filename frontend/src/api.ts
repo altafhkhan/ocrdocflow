@@ -164,8 +164,18 @@ export async function confirmExtraction(documentId: number, data: ExtractionData
 
 // --- CSV export ------------------------------------------------------------
 
-export async function downloadCsv(startDate: string, endDate: string, language: string) {
-  const params = new URLSearchParams({ start_date: startDate, end_date: endDate, language });
+export async function downloadCsv(
+  startDate: string,
+  endDate: string,
+  language: string,
+  documentLanguage: string = "all",
+) {
+  const params = new URLSearchParams({
+    start_date: startDate,
+    end_date: endDate,
+    language,
+    document_language: documentLanguage,
+  });
   const res = await fetch(`${API_BASE}/api/v1/exports/csv?${params.toString()}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });

@@ -100,7 +100,9 @@ _DOCUMENT_PROMPT = (
     "- sub_total, tax, discount, grand_total: plain numbers; grand_total is the "
     "final amount payable (net / total amount).\n"
     "If the document contains no invoice-like content at all, return an empty "
-    "\"invoices\" list."
+    "\"invoices\" list.\n"
+    "3. \"language\": the main language of the document as a two-letter ISO 639-1 "
+    "code (en, ar, ur, fr, de, es, nl, zh, ja, ko, ...)."
 )
 
 _NULLABLE_STR = {"type": "STRING", "nullable": True}
@@ -110,6 +112,7 @@ _DOCUMENT_SCHEMA = {
     "type": "OBJECT",
     "properties": {
         "pages": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "language": {"type": "STRING"},
         "invoices": {
             "type": "ARRAY",
             "items": {
@@ -146,7 +149,7 @@ _DOCUMENT_SCHEMA = {
             },
         },
     },
-    "required": ["pages", "invoices"],
+    "required": ["pages", "invoices", "language"],
 }
 
 _HEADER_STR_FIELDS = ("invoice_number", "invoice_date", "due_date", "currency",
@@ -271,10 +274,13 @@ class GeminiProvider(OCRProvider):
             pages.append("" if text == "[no text]" else text)
         return pages
 
-    def extract_document(self, images: list[Image.Image], language: str) -> tuple[list[str], list[dict]]:
+    def extract_document(self, images: list[Image.Image], language: str
+                         ) -> tuple[list[str], list[dict], str | None]:
         """
-        One request for the whole document. Returns (page_texts, invoices)
-        where invoices has the same shape as field_extractor output.
+        One request for the whole document. Returns (page_texts, invoices,
+        detected_language) where invoices has the same shape as
+        field_extractor output and detected_language is a two-letter code
+        (or None if the model gave something unusable).
         """
         prompt = _DOCUMENT_PROMPT.format(n=len(images), language=_LANGUAGE_NAMES.get(language, language))
         parts = [_image_part(img) for img in images] + [{"text": prompt}]
@@ -290,4 +296,5 @@ class GeminiProvider(OCRProvider):
         pages = [str(p or "") for p in (data.get("pages") or [])]
         # Keep page count honest even if the model merged/dropped pages.
         pages = (pages + [""] * len(images))[:len(images)]
-        return pages, _normalise_invoices(data.get("invoices"))
+        detected = str(data.get("language") or "").strip().lower()[:2] or None
+        return pages, _normalise_invoices(data.get("invoices")), detected
