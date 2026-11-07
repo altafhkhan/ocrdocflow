@@ -110,6 +110,17 @@ export interface ExtractionData {
   items: ExtractionItem[];
 }
 
+// The original upload (PDF/JPG/PNG) as a Blob, for the side-by-side
+// preview in the review screen. Caller is responsible for revoking any
+// object URL it creates from it.
+export async function getDocumentFile(documentId: number): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/v1/documents/${documentId}/file`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) throw new Error("Could not load the document preview.");
+  return res.blob();
+}
+
 export async function getExtraction(documentId: number, invoiceIndex: number = 0): Promise<ExtractionData> {
   const res = await fetch(`${API_BASE}/api/v1/documents/${documentId}/extraction?invoice_index=${invoiceIndex}`, {
     headers: { Authorization: `Bearer ${getToken()}` },

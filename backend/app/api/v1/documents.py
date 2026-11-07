@@ -3,6 +3,7 @@ import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -222,6 +223,34 @@ def list_my_documents(
     # (Security Policy Section 8 - Tenant Isolation)
     docs = db.query(Document).filter(Document.user_id == current_user.id).all()
     return docs
+
+
+_MEDIA_TYPES = {"pdf": "application/pdf", "jpg": "image/jpeg", "png": "image/png"}
+
+
+@router.get("/{document_id}/file")
+def get_document_file(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The original upload, so the review screen can show it next to the
+    extracted fields. Same ownership rule as get_document: a user can only
+    ever fetch their own files (Security Policy Section 8).
+    """
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .first()
+    )
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    path = os.path.join(settings.UPLOAD_DIR, doc.stored_filename)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="File is no longer stored")
+    ext = doc.stored_filename.rsplit(".", 1)[-1].lower()
+    return FileResponse(path, media_type=_MEDIA_TYPES.get(ext, "application/octet-stream"))
 
 
 @router.get("/{document_id}")

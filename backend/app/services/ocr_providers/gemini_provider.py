@@ -42,7 +42,12 @@ _API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_MODEL = "gemini-3.6-flash"
 DEFAULT_FALLBACK_MODELS = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
 
-_LANGUAGE_NAMES = {"en": "English", "ar": "Arabic", "ur": "Urdu", "auto": "unknown (detect it)"}
+_LANGUAGE_NAMES = {
+    "auto": "unknown (detect it)",
+    "en": "English", "ar": "Arabic", "ur": "Urdu",
+    "fr": "French", "de": "German", "es": "Spanish", "nl": "Dutch",
+    "zh": "Chinese", "ja": "Japanese", "ko": "Korean",
+}
 
 _TRANSCRIBE_RULES = (
     "Transcription rules:\n"
@@ -56,6 +61,8 @@ _TRANSCRIBE_RULES = (
     "- For Arabic/Urdu/Persian pages read each line right-to-left: write the label "
     "first and its value after it (e.g. 'رقم الفاتورة: INV-2201'), and write table "
     "rows starting from the right-most column.\n"
+    "- For Chinese/Japanese/Korean keep full-width characters and vertical text "
+    "in reading order; do not insert spaces inside words.\n"
     "- If a word is unreadable write [?] in its place.\n"
 )
 

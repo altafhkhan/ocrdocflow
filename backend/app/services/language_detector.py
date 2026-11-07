@@ -17,7 +17,12 @@ purpose language identifier.
 import re
 
 _ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
-_LATIN_RE = re.compile(r"[A-Za-z]")
+_LATIN_RE = re.compile(r"[A-Za-z\u00C0-\u024F]")  # incl. accented Latin letters
+# East Asian scripts. Han ideographs are shared by Chinese and Japanese, so
+# kana (Japanese only) and Hangul (Korean only) decide; otherwise Chinese.
+_HAN_RE = re.compile(r"[\u4E00-\u9FFF\u3400-\u4DBF]")
+_KANA_RE = re.compile(r"[\u3040-\u30FF]")
+_HANGUL_RE = re.compile(r"[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]")
 # Letters that exist in Urdu but not in Arabic (ٹ ڈ ڑ ں ے ہ). If a page in
 # Arabic script uses any of them it is (almost certainly) Urdu.
 _URDU_ONLY_RE = re.compile(r"[ٹڈڑںےہ]")
@@ -25,19 +30,33 @@ _URDU_ONLY_RE = re.compile(r"[ٹڈڑںےہ]")
 
 def detect_script_language(text: str) -> str | None:
     """
-    Returns "ur", "ar", "en", or None (not enough alphabetic text to judge -
-    e.g. a document that's mostly numbers/tables).
+    Returns "ur", "ar", "zh", "ja", "ko", "en", or None (not enough text to
+    judge - e.g. a document that's mostly numbers/tables).
+
+    Latin-script languages (French, German, Spanish, Dutch...) all come back
+    as "en": the script alone cannot tell them apart, and the review screen
+    only needs the direction/labels, which the user's own choice provides.
     """
     if not text:
         return None
 
     arabic_count = len(_ARABIC_RE.findall(text))
     latin_count = len(_LATIN_RE.findall(text))
-    total = arabic_count + latin_count
+    han_count = len(_HAN_RE.findall(text))
+    kana_count = len(_KANA_RE.findall(text))
+    hangul_count = len(_HANGUL_RE.findall(text))
+    cjk_count = han_count + kana_count + hangul_count
+    total = arabic_count + latin_count + cjk_count
 
     if total < 10:  # too little alphabetic text to judge confidently
         return None
 
+    if cjk_count >= arabic_count and cjk_count >= latin_count:
+        if kana_count:
+            return "ja"
+        if hangul_count:
+            return "ko"
+        return "zh"
     if arabic_count > latin_count:
         return "ur" if _URDU_ONLY_RE.search(text) else "ar"
     return "en"

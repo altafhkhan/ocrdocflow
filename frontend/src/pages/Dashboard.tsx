@@ -215,6 +215,13 @@ export default function Dashboard() {
             <option value="en">English</option>
             <option value="ar">Arabic</option>
             <option value="ur">Urdu</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="es">Spanish</option>
+            <option value="nl">Dutch</option>
+            <option value="zh">Chinese</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
           </select>
 
           <label
