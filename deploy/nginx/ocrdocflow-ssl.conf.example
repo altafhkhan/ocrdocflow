@@ -26,8 +26,17 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Vite names bundles by content hash, so assets can be cached for a
+    # long time - but index.html must NOT be cached, or browsers keep
+    # loading the previous bundle for hours after a redeploy.
+    location /assets/ {
+        root /var/www/ocrdocflow;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
     location / {
         root /var/www/ocrdocflow;
         try_files $uri /index.html;
+        add_header Cache-Control "no-cache";
     }
 }
