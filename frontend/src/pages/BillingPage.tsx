@@ -6,6 +6,7 @@ export default function BillingPage() {
   const [me, setMe] = useState<CurrentUser | null>(null);
   const [plans, setPlans] = useState<Record<string, PlanInfo>>({});
   const [promo, setPromo] = useState<PromoInfo | null>(null);
+  const [paymentsLive, setPaymentsLive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [subscribing, setSubscribing] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -21,6 +22,7 @@ export default function BillingPage() {
         setMe(meData);
         setPlans(plansData.plans);
         setPromo(plansData.promo);
+        setPaymentsLive(plansData.payments_live);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -64,6 +66,18 @@ export default function BillingPage() {
         </div>
 
         {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+
+        {!paymentsLive && (
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900">
+            <p className="font-semibold">Payments open soon</p>
+            <p className="mt-1">
+              Online payment is not switched on yet, so the Subscribe buttons below cannot take a real card.
+              To get a paid plan now, email{" "}
+              <a href="mailto:altaf.khan@qumaxa.com" className="underline">altaf.khan@qumaxa.com</a>{" "}
+              and we will set it up for you by hand. The launch offer still applies.
+            </p>
+          </div>
+        )}
 
         {promo && (
           <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-5 py-4">

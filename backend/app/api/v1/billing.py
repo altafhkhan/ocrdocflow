@@ -151,7 +151,14 @@ def list_plans():
         if promo:
             entry["promo_price_usd"] = round(plan["price_usd"] * (100 - promo["percent_off"]) / 100, 2)
         plans[key] = entry
-    return {"plans": plans, "promo": promo}
+    return {"plans": plans, "promo": promo, "payments_live": payments_live()}
+
+
+def payments_live() -> bool:
+    """True only with a live Stripe secret key. With no key or a test key
+    (sk_test_...), checkout cannot take real money, and the Billing page
+    says so instead of letting a buyer think the product is broken."""
+    return settings.STRIPE_SECRET_KEY.startswith("sk_live_")
 
 
 @router.post("/create-checkout-session")

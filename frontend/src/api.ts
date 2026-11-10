@@ -396,6 +396,8 @@ export interface PromoInfo {
 export interface PlansResponse {
   plans: Record<string, PlanInfo>;
   promo: PromoInfo | null;
+  // False while Stripe runs in test mode: checkout cannot take real payments yet.
+  payments_live: boolean;
 }
 
 export async function getPlans(): Promise<PlansResponse> {
