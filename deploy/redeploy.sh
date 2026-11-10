@@ -41,7 +41,20 @@ echo "== 2/6 shipping code"
 git archive --format=tar HEAD | "${SSH[@]}" "mkdir -p '$REMOTE_DIR' && tar -x -C '$REMOTE_DIR' -f -"
 
 echo "== 3/6 shipping frontend/dist"
-tar -C frontend -cf - dist | "${SSH[@]}" "mkdir -p '$REMOTE_DIR/frontend' && rm -rf '$REMOTE_DIR/frontend/dist' && tar -x -C '$REMOTE_DIR/frontend' -f -"
+# The shared nginx bind-mounts $REMOTE_DIR/frontend/dist. Deleting and
+# recreating that directory breaks the mount (nginx then serves 500s until
+# restarted), so replace its CONTENTS in place instead, and give the files
+# to root (tar would keep the Windows uid they were built under).
+tar -C frontend -cf - dist | "${SSH[@]}" "
+  set -e
+  mkdir -p '$REMOTE_DIR/frontend/dist'
+  tmp=\$(mktemp -d)
+  tar -x -C \"\$tmp\" -f -
+  find '$REMOTE_DIR/frontend/dist' -mindepth 1 -delete
+  cp -a \"\$tmp/dist/.\" '$REMOTE_DIR/frontend/dist/'
+  chown -R root:root '$REMOTE_DIR/frontend/dist'
+  rm -rf \"\$tmp\"
+"
 
 echo "== 4/6 settings"
 # Keys the new code needs. Values come from the local backend/.env; only
@@ -71,7 +84,8 @@ echo "== 5/6 rebuilding API container"
 "${SSH[@]}" "cd '$REMOTE_DIR/deploy' && docker compose up -d --build && docker image prune -f >/dev/null && sleep 5 && docker ps --format '{{.Names}}  {{.Status}}' | grep ocrdocflow && docker logs --tail 5 ocrdocflow-api 2>&1 | tail -5"
 
 echo "== 6/6 verifying live site (via $SITE_IP, in case DNS caches are stale)"
-curl -sS --resolve "$SITE_HOST:443:$SITE_IP" "https://$SITE_HOST/api/v1/health"; echo
-curl -sS --resolve "$SITE_HOST:443:$SITE_IP" "https://$SITE_HOST/api/v1/billing/plans" | head -c 300; echo
-curl -sS --resolve "$SITE_HOST:443:$SITE_IP" "https://$SITE_HOST/" | grep -o '<script[^>]*src="[^"]*"' | head -1
+# Informational only: a failed check must not abort the script (set -e).
+curl -sS --resolve "$SITE_HOST:443:$SITE_IP" "https://$SITE_HOST/api/v1/health" || true; echo
+curl -sS --resolve "$SITE_HOST:443:$SITE_IP" "https://$SITE_HOST/api/v1/billing/plans" | head -c 300 || true; echo
+curl -sS --resolve "$SITE_HOST:443:$SITE_IP" "https://$SITE_HOST/" | grep -o 'src="[^"]*\.js"' | head -1 || true
 echo "Done. Open https://$SITE_HOST and check: language dropdown (11 entries), Billing page offer, review split view."
