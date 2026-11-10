@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# Production build config holds no secrets - keep it tracked so deploys are reproducible
+!frontend/.env.production
 
 # Python
 __pycache__/

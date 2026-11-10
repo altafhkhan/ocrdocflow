@@ -92,6 +92,20 @@ renew` job (see its DEPLOY.md) renews every certificate it manages,
 
 ## Redeploying after a code change
 
+One command from the dev machine (Git Bash), after committing:
+
+```bash
+bash deploy/redeploy.sh
+```
+
+It builds the frontend locally, ships the committed code and `dist/` to
+`/opt/ocrdocflow`, adds any new OCR / promotion keys the server's
+`backend/.env` is missing (copied from the local `.env`), rebuilds the
+`ocrdocflow-api` container and checks the live health and plans
+endpoints. Override the target with `DEPLOY_HOST=root@<ip>`.
+
+Manual equivalent:
+
 ```bash
 cd /opt/ocrdocflow/deploy
 docker compose up -d --build   # api
