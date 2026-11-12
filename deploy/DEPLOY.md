@@ -90,6 +90,25 @@ No extra cron entry needed — the Console's existing monthly `certbot
 renew` job (see its DEPLOY.md) renews every certificate it manages,
 `ocrdocflow.qumaxa.com` included, and already restarts nginx afterward.
 
+## Password reset email
+
+"Forgot password?" on the login page emails a single-use link that works
+for 30 minutes. Sending goes through Resend. Add to the server's
+`backend/.env`, then `docker compose up -d` in `deploy/`:
+
+```
+RESEND_API_KEY=re_...                       # sending-only key is enough
+MAIL_FROM=OCRDocFlow <no-reply@qumaxa.com>  # a domain verified in Resend
+FRONTEND_URL=https://ocrdocflow.qumaxa.com  # already set for Stripe
+```
+
+Without `RESEND_API_KEY` nothing is emailed; the link is written to the
+API log instead, so an operator can still help a locked-out user:
+
+```bash
+docker logs --since 30m ocrdocflow-api 2>&1 | grep "Password reset link"
+```
+
 ## Redeploying after a code change
 
 One command from the dev machine (Git Bash), after committing:

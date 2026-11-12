@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
 
+    # --- Email (password reset) - see app/services/email_service.py ---
+    # Resend API key (sending-only is enough) and the From address on a
+    # domain verified in Resend. Leave RESEND_API_KEY empty and reset
+    # links are written to the server log instead of being emailed.
+    RESEND_API_KEY: str = ""
+    MAIL_FROM: str = "OCRDocFlow <no-reply@qumaxa.com>"
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 30
+
     # --- OCR engine (see app/services/ocr_providers/) ---
     # "gemini" = Google Gemini API (default; needs GEMINI_API_KEY, else we
     #            quietly fall back to paddle).

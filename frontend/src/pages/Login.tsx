@@ -44,6 +44,9 @@ export default function Login() {
           Log In
         </button>
         <p className="text-sm text-center mt-4">
+          <Link to="/forgot-password" className="text-blue-600">Forgot password?</Link>
+        </p>
+        <p className="text-sm text-center mt-2">
           No account? <Link to="/register" className="text-blue-600">Register</Link>
         </p>
       </form>

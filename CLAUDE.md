@@ -13,6 +13,9 @@ rate limiting, Stripe subscriptions (starter/professional/business).
 - Billing is wired but in **Stripe test mode**: launched free/beta, not charging.
 - OCR runs **synchronously** (no job queue) — not built for many concurrent users.
 - Extraction is **rule-based**; no LLM document understanding yet.
+- Password reset: emailed single-use link (Resend). Until `RESEND_API_KEY`
+  is set on the server the link only goes to the API log (see
+  `deploy/DEPLOY.md`, "Password reset email").
 - `README.md` is stale and understates scope. Trust the code and
   `deploy/DEPLOY.md`.
 

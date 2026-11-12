@@ -15,10 +15,39 @@ export async function login(email: string, password: string) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
+  if (res.status === 429) {
+    throw new Error("Too many login attempts. Please wait 15 minutes, or use \"Forgot password?\" below.");
+  }
   if (!res.ok) throw new Error("Login failed. Check your email and password.");
   const data = await res.json();
   localStorage.setItem("token", data.access_token);
   return data;
+}
+
+// Password reset, step 1: ask for the email with the reset link. The
+// server answers the same way whether or not the email has an account.
+export async function requestPasswordReset(email: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/v1/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (res.status === 429) throw new Error("Too many requests. Please wait 15 minutes and try again.");
+  if (!res.ok) throw new Error("Could not send the reset link. Please check the email address and try again.");
+  return (await res.json()).message;
+}
+
+// Password reset, step 2: the token from the emailed link + the new password.
+export async function resetPassword(token: string, newPassword: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/v1/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  if (res.status === 429) throw new Error("Too many attempts. Please wait 15 minutes and try again.");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Could not change the password.");
+  return data.message;
 }
 
 export async function register(email: string, password: string, fullName: string) {
