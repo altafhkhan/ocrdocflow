@@ -99,6 +99,54 @@ def get_extraction(
         )
         .first()
     )
+
+    # Once a reviewer has pressed "Save", their corrected values live in the
+    # permanent invoices / invoice_items tables; the staging tables above
+    # keep the ORIGINAL OCR draft and are never updated. Reading only the
+    # staging draft made the review screen show the old value again when it
+    # was reopened (or when stepping between invoices of one document),
+    # while the database - and every export - held the corrected one. So a
+    # saved invoice always wins over the draft.
+    saved = (
+        db.query(Invoice)
+        .filter(Invoice.document_id == doc.id, Invoice.invoice_index == invoice_index)
+        .first()
+    )
+    if saved is not None:
+        saved_items = (
+            db.query(InvoiceItem)
+            .filter(InvoiceItem.invoice_id == saved.id)
+            .order_by(InvoiceItem.line_order, InvoiceItem.id)
+            .all()
+        )
+        saved_count = db.query(Invoice).filter(Invoice.document_id == doc.id).count()
+        return {
+            "invoice_index": invoice_index,
+            "total_invoices": max(total_invoices, saved_count),
+            "status": "saved",
+            "invoice_number": saved.invoice_number,
+            "invoice_date": saved.invoice_date,
+            "due_date": saved.due_date,
+            "currency": saved.currency,
+            "client_name": saved.client_name,
+            "client_company": saved.client_company,
+            "client_email": saved.client_email,
+            "sub_total": saved.sub_total,
+            "tax": saved.tax,
+            "discount": saved.discount,
+            "grand_total": saved.grand_total,
+            "items": [
+                {
+                    "id": item.id,
+                    "description": item.description,
+                    "qty": item.qty,
+                    "unit_price": item.unit_price,
+                    "total_price": item.total_price,
+                }
+                for item in saved_items
+            ],
+        }
+
     if header is None:
         raise HTTPException(
             status_code=404,

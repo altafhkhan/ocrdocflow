@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { UPLOAD_LANGUAGES } from "../languages";
 import { useNavigate } from "react-router-dom";
+import UploadDropZone from "../components/UploadDropZone";
 import {
   visitorUpload, listVisitorDocuments, getVisitorExtraction, downloadVisitorCsv,
 } from "../api";
@@ -75,9 +76,8 @@ export default function VisitorPage() {
     }
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // One path for a file picked in the dialog and a file dropped on the box.
+  async function handleFile(file: File) {
     await doUpload(file);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -150,23 +150,14 @@ export default function VisitorPage() {
             ))}
           </select>
 
-          <label
-            className={`block border-2 border-dashed rounded-lg p-6 text-center ${
-              uploading
-                ? "border-gray-200 text-gray-400"
-                : "border-gray-300 cursor-pointer hover:border-blue-400 text-gray-600"
-            }`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              className="hidden"
-              onChange={handleFileChange}
-              disabled={uploading || needsEmail}
-            />
-            {uploading ? "Working on it..." : "Click to upload a PDF or image invoice (max 1 MB)"}
-          </label>
+          <UploadDropZone
+            inputRef={fileInputRef}
+            disabled={uploading || needsEmail}
+            busy={uploading}
+            idleText="Drag and drop a PDF or image invoice here, or click to choose a file (max 1 MB)"
+            onFile={handleFile}
+            onReject={setError}
+          />
         </div>
 
         {needsEmail && (
