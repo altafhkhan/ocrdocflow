@@ -67,6 +67,56 @@ class CheckoutRequest(BaseModel):
     plan: str
 
 
+class ConfirmCheckoutRequest(BaseModel):
+    session_id: str
+
+
+def _session_is_paid(session: dict) -> bool:
+    """A finished Checkout Session whose payment went through (or needed
+    none, e.g. a 100% discount)."""
+    return session.get("status") == "complete" and session.get("payment_status") in ("paid", "no_payment_required")
+
+
+def _apply_paid_checkout(db: Session, session: dict) -> Organization | None:
+    """
+    Puts the organization named in a PAID Checkout Session on the plan it
+    bought. The one place a plan is ever upgraded - used by both the Stripe
+    webhook and /confirm-checkout, so the two paths cannot disagree.
+
+    Safe to run more than once for the same session (the webhook and the
+    browser's return can both arrive, in either order, and Stripe may
+    resend an event): the second run changes nothing, and in particular
+    does not restart the billing period.
+    """
+    org_id = session.get("client_reference_id") or (session.get("metadata") or {}).get("organization_id")
+    plan = (session.get("metadata") or {}).get("plan")
+    subscription_id = session.get("subscription")
+    if isinstance(subscription_id, dict):  # expanded object rather than an id
+        subscription_id = subscription_id.get("id")
+
+    if not org_id or not str(org_id).isdigit() or plan not in PLAN_PRICE_IDS:
+        logger.warning("Paid checkout could not be applied: organization_id=%s plan=%s", org_id, plan)
+        return None
+    org = db.query(Organization).filter(Organization.id == int(org_id)).first()
+    if org is None:
+        logger.warning("Paid checkout names an unknown organization_id=%s", org_id)
+        return None
+
+    already_applied = (
+        org.plan == plan
+        and org.subscription_status == "active"
+        and org.stripe_subscription_id == subscription_id
+    )
+    if not already_applied:
+        org.plan = plan
+        org.plan_started_at = datetime.now(timezone.utc)
+        org.stripe_subscription_id = subscription_id
+        org.subscription_status = "active"
+        db.commit()
+        logger.warning("Organization '%s' (id %s) is now on plan '%s' via Stripe checkout.", org.name, org.id, plan)
+    return org
+
+
 # --- Launch promotion ------------------------------------------------------
 # "X% off for the first N subscribers" is modelled as ONE Stripe coupon with
 # max_redemptions=N (and optionally redeem_by). We look it up by metadata so
@@ -194,7 +244,9 @@ def create_checkout_session(
         customer=org.stripe_customer_id,
         mode="subscription",
         line_items=[{"price": PLAN_PRICE_IDS[payload.plan], "quantity": 1}],
-        success_url=f"{FRONTEND_URL}/dashboard?checkout=success",
+        # {CHECKOUT_SESSION_ID} is filled in by Stripe. The dashboard hands
+        # it to /confirm-checkout, which asks Stripe whether it was paid.
+        success_url=f"{FRONTEND_URL}/dashboard?checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{FRONTEND_URL}/dashboard?checkout=cancelled",
         # Lets the webhook identify which ORGANIZATION this checkout
         # belongs to.
@@ -229,6 +281,55 @@ def create_checkout_session(
     return {"checkout_url": session.url}
 
 
+@router.post("/confirm-checkout")
+def confirm_checkout(
+    payload: ConfirmCheckoutRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Called by the dashboard when Stripe sends the buyer back after paying.
+
+    The plan used to change ONLY when Stripe's webhook reached us. If that
+    call was late, failed, or the webhook was never registered (as on the
+    live server until 2026-11-14), a customer who had paid came back to a
+    dashboard still saying "free". Here we ask Stripe directly about this
+    one session and apply it at once; the webhook stays as the second path
+    for when the buyer closes the tab before returning.
+
+    Nothing in the request is trusted: the session is fetched from Stripe
+    with our secret key, it must be finished and paid, and it must belong
+    to the caller's own organization.
+    """
+    org = current_user.organization
+    if org is None:
+        raise HTTPException(status_code=400, detail="No organization found for this account.")
+    if not payload.session_id.startswith("cs_") or len(payload.session_id) > 200:
+        raise HTTPException(status_code=400, detail="That is not a checkout session.")
+
+    try:
+        session = stripe.checkout.Session.retrieve(payload.session_id).to_dict()
+    except stripe.error.InvalidRequestError:
+        raise HTTPException(status_code=404, detail="Checkout session not found.")
+    except stripe.error.StripeError:
+        logger.exception("Could not read checkout session from Stripe")
+        raise HTTPException(status_code=502, detail="Could not reach the payment provider. Please refresh in a minute.")
+
+    # Someone else's session answers exactly like one that does not exist.
+    if str(session.get("client_reference_id")) != str(org.id):
+        raise HTTPException(status_code=404, detail="Checkout session not found.")
+
+    if not _session_is_paid(session):
+        return {"status": "pending", "plan": org.plan,
+                "message": "Your payment has not been confirmed yet. Refresh this page in a minute."}
+
+    applied = _apply_paid_checkout(db, session)
+    if applied is None:
+        raise HTTPException(status_code=409, detail="The payment went through, but the plan could not be applied. Please contact support.")
+    name = PLANS.get(applied.plan, {}).get("name", applied.plan)
+    return {"status": "active", "plan": applied.plan, "message": f"Payment received. You are now on the {name} plan."}
+
+
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     """
@@ -256,27 +357,11 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     data = event_dict["data"]["object"]
 
     if event_type == "checkout.session.completed":
-        org_id = data.get("client_reference_id") or (data.get("metadata") or {}).get("organization_id")
-        plan = (data.get("metadata") or {}).get("plan")
-        subscription_id = data.get("subscription")
-
-        if org_id:
-            org = db.query(Organization).filter(Organization.id == int(org_id)).first()
-            if org and plan in PLAN_PRICE_IDS:
-                org.plan = plan
-                org.plan_started_at = datetime.now(timezone.utc)
-                org.stripe_subscription_id = subscription_id
-                org.subscription_status = "active"
-                db.commit()
-                logger.info(
-                    "Organization '%s' upgraded to plan '%s' via Stripe checkout.",
-                    org.name, plan,
-                )
-            else:
-                logger.warning(
-                    "Webhook checkout.session.completed: could not resolve organization_id=%s plan=%s",
-                    org_id, plan,
-                )
+        # Same code path as /confirm-checkout; whichever arrives second is a no-op.
+        if _session_is_paid(data):
+            _apply_paid_checkout(db, data)
+        else:
+            logger.warning("Webhook checkout.session.completed for an unpaid session %s - ignored.", data.get("id"))
 
     elif event_type == "customer.subscription.deleted":
         subscription_id = data.get("id")

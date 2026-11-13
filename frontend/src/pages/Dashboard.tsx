@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { UPLOAD_LANGUAGES } from "../languages";
-import { uploadDocument, listDocuments, getDocument, getToken, getMe, CurrentUser } from "../api";
+import { uploadDocument, listDocuments, getDocument, getToken, getMe, confirmCheckout, CurrentUser } from "../api";
 import { useNavigate } from "react-router-dom";
 import UploadDropZone from "../components/UploadDropZone";
 import ReviewModal from "../components/ReviewModal";
@@ -47,6 +47,7 @@ export default function Dashboard() {
   const [lastFile, setLastFile] = useState<File | null>(null);
   const [lastDetectedLanguage, setLastDetectedLanguage] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [checkoutNotice, setCheckoutNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stageTimerRef = useRef<number | null>(null);
   const navigate = useNavigate();
@@ -57,7 +58,24 @@ export default function Dashboard() {
       return;
     }
     refreshList();
-    getMe().then(setCurrentUser).catch(() => {});
+
+    // Back from Stripe Checkout? Confirm the payment BEFORE reading the
+    // account, so the plan shown is the one just bought. The query string
+    // is removed either way, so a refresh does not repeat this.
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    const sessionId = params.get("session_id");
+    if (checkout) window.history.replaceState(null, "", window.location.pathname);
+    if (checkout === "success" && sessionId) {
+      setCheckoutNotice({ ok: true, text: "Confirming your payment..." });
+      confirmCheckout(sessionId)
+        .then((r) => setCheckoutNotice({ ok: r.status === "active", text: r.message }))
+        .catch((err) => setCheckoutNotice({ ok: false, text: err.message }))
+        .finally(() => getMe().then(setCurrentUser).catch(() => {}));
+    } else {
+      if (checkout === "cancelled") setCheckoutNotice({ ok: false, text: "Checkout was cancelled. Your plan has not changed." });
+      getMe().then(setCurrentUser).catch(() => {});
+    }
     return () => {
       if (stageTimerRef.current) window.clearInterval(stageTimerRef.current);
     };
@@ -200,6 +218,19 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+
+        {checkoutNotice && (
+          <div
+            className={`mb-4 rounded-lg border px-4 py-3 text-sm flex justify-between items-start gap-4 ${
+              checkoutNotice.ok
+                ? "border-green-200 bg-green-50 text-green-800"
+                : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}
+          >
+            <span>{checkoutNotice.text}</span>
+            <button onClick={() => setCheckoutNotice(null)} className="text-xs underline shrink-0">Dismiss</button>
+          </div>
+        )}
 
         {/* CURRENT UPLOAD */}
         <div className="bg-white rounded-lg shadow p-4 mb-4">

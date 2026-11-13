@@ -435,6 +435,24 @@ export async function getPlans(): Promise<PlansResponse> {
   return res.json();
 }
 
+// Called when Stripe sends the buyer back to the dashboard after paying:
+// the server asks Stripe whether this session was paid and applies the plan.
+export async function confirmCheckout(sessionId: string): Promise<{ status: string; plan: string; message: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/billing/confirm-checkout`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Could not confirm the payment." }));
+    throw new Error(err.detail);
+  }
+  return res.json();
+}
+
 export async function createCheckoutSession(plan: string): Promise<string> {
   const res = await fetch(`${API_BASE}/api/v1/billing/create-checkout-session`, {
     method: "POST",

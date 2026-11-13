@@ -90,6 +90,30 @@ No extra cron entry needed — the Console's existing monthly `certbot
 renew` job (see its DEPLOY.md) renews every certificate it manages,
 `ocrdocflow.qumaxa.com` included, and already restarts nginx afterward.
 
+## Stripe: how a paid checkout becomes a plan
+
+Two paths apply a paid checkout, and either one is enough:
+
+1. The buyer's return. Stripe sends the browser back to
+   `/dashboard?checkout=success&session_id=...`; the dashboard calls
+   `POST /api/v1/billing/confirm-checkout`, which asks Stripe whether that
+   session is paid and belongs to the caller's organization, then sets the
+   plan. Needs only `STRIPE_SECRET_KEY`.
+2. The webhook, for buyers who close the tab before returning, and for
+   cancellations. It must be registered in the Stripe Dashboard, separately
+   for Test mode and Live mode (Developers -> Webhooks -> Add endpoint):
+
+   - URL `https://ocrdocflow.qumaxa.com/api/v1/billing/webhook`
+   - events `checkout.session.completed` and `customer.subscription.deleted`
+   - put the endpoint's signing secret (`whsec_...`) in the server's
+     `backend/.env` as `STRIPE_WEBHOOK_SECRET`, then
+     `docker compose up -d --force-recreate` in `deploy/`.
+
+   A secret printed by `stripe listen` on a developer machine is NOT this
+   one; it only works while that command is running. Until 2026-11-14 no
+   endpoint was registered at all, so paid test checkouts left the
+   organization on the free plan.
+
 ## Password reset email
 
 "Forgot password?" on the login page emails a single-use link that works
