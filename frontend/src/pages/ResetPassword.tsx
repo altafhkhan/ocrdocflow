@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { resetPassword } from "../api";
 
-const MIN_LENGTH = 8;
+const MIN_LENGTH = 12; // same rule as the Register page
 
 export default function ResetPassword() {
   const [params] = useSearchParams();

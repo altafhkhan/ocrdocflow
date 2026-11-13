@@ -27,6 +27,8 @@ export default function Register() {
         {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
         <input
           type="text"
+          name="name"
+          autoComplete="name"
           placeholder="Full name"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
@@ -34,6 +36,8 @@ export default function Register() {
         />
         <input
           type="email"
+          name="email"
+          autoComplete="username"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -42,6 +46,8 @@ export default function Register() {
         />
         <input
           type="password"
+          name="new-password"
+          autoComplete="new-password"
           placeholder="Password (min 12 characters)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}

@@ -41,6 +41,8 @@ export default function ForgotPassword() {
             {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
             <input
               type="email"
+              name="email"
+              autoComplete="username"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

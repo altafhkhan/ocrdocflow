@@ -22,7 +22,7 @@ from app.services import email_service, usage_service
 
 logger = logging.getLogger(__name__)
 
-MIN_PASSWORD_LENGTH = 8
+MIN_PASSWORD_LENGTH = 12  # same rule the Register page enforces
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
