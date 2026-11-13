@@ -93,16 +93,40 @@ renew` job (see its DEPLOY.md) renews every certificate it manages,
 ## Password reset email
 
 "Forgot password?" on the login page emails a single-use link that works
-for 30 minutes. Sending goes through Resend. Add to the server's
-`backend/.env`, then `docker compose up -d` in `deploy/`:
+for 30 minutes. There are two ways to send it; set ONE in the server's
+`backend/.env`, then `docker compose up -d --force-recreate` in `deploy/`.
+
+Option 1, your own mailbox over SMTP (used whenever `SMTP_HOST` is set):
 
 ```
-RESEND_API_KEY=re_...                       # sending-only key is enough
+SMTP_HOST=premium46-3.web-hosting.com       # the qumaxa.com mail host (not mail.qumaxa.com: certificate mismatch)
+SMTP_PORT=26                                # see the note on ports below
+SMTP_USERNAME=<the mailbox address>
+SMTP_PASSWORD=<the mailbox password>
+MAIL_FROM=OCRDocFlow <the mailbox address>  # must be that mailbox
+```
+
+Option 2, Resend (used when `SMTP_HOST` is empty):
+
+```
+RESEND_API_KEY=<real key from resend.com>   # about 36 characters; sending-only is enough
 MAIL_FROM=OCRDocFlow <no-reply@qumaxa.com>  # a domain verified in Resend
-FRONTEND_URL=https://ocrdocflow.qumaxa.com  # already set for Stripe
 ```
 
-Without `RESEND_API_KEY` nothing is emailed; the link is written to the
+`FRONTEND_URL=https://ocrdocflow.qumaxa.com` is needed for both (already
+set for Stripe).
+
+Ports: DigitalOcean blocks outgoing 25, 465 and 587 from this droplet
+(tested 2026-11-14: they time out to every mail host, while the same
+ports answer from elsewhere). The qumaxa.com mail host also listens on
+port 26 with STARTTLS, which is not blocked and was verified from inside
+the API container (certificate valid, login offered). So use
+`SMTP_PORT=26`; `SMTP_SECURITY=auto` picks STARTTLS for it. If
+DigitalOcean lifts the block on request, 465 works too.
+A failed send is logged with the mail server's own reason
+(`SMTP send to ... failed: ...` or `Resend rejected ...`).
+
+With neither option set nothing is emailed; the link is written to the
 API log instead, so an operator can still help a locked-out user:
 
 ```bash

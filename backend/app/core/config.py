@@ -30,9 +30,18 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
 
     # --- Email (password reset) - see app/services/email_service.py ---
-    # Resend API key (sending-only is enough) and the From address on a
-    # domain verified in Resend. Leave RESEND_API_KEY empty and reset
-    # links are written to the server log instead of being emailed.
+    # Two ways to send. SMTP through your own mailbox is used when
+    # SMTP_HOST is set; otherwise Resend when RESEND_API_KEY is set. With
+    # neither, reset links are written to the server log, not emailed.
+    # MAIL_FROM: for SMTP, the mailbox itself; for Resend, an address on a
+    # domain verified there.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 465
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    # "auto" = SSL on port 465, STARTTLS on any other port. Or force
+    # "ssl" / "starttls" / "none" (none = unencrypted, local testing only).
+    SMTP_SECURITY: str = "auto"
     RESEND_API_KEY: str = ""
     MAIL_FROM: str = "OCRDocFlow <no-reply@qumaxa.com>"
     PASSWORD_RESET_EXPIRE_MINUTES: int = 30
