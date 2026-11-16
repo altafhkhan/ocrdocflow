@@ -129,6 +129,8 @@ export interface ExtractionData {
   invoice_date: string | null;
   due_date: string | null;
   currency: string | null;
+  supplier_name: string | null;
+  supplier_email: string | null;
   client_name: string | null;
   client_company: string | null;
   client_email: string | null;

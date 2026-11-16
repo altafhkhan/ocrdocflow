@@ -71,6 +71,7 @@ check("before saving, review shows the OCR draft",
       draft["invoice_number"] == "INV-0O1" and draft["status"] == "pending_review" and draft["total_invoices"] == 2)
 
 corrected = dict(draft, invoice_number="INV-001", client_name="Acme Ltd", grand_total=250,
+                 supplier_name="Northwind Supplies", supplier_email="ar@northwind.example",
                  items=[{"description": "Widget", "qty": 2, "unit_price": 100, "total_price": 200},
                         {"description": "Delivery", "qty": 1, "unit_price": 50, "total_price": 50}])
 r = client.post(f"{URL}/confirm", headers=H, json=corrected)
@@ -79,6 +80,9 @@ check("save succeeds", r.status_code == 200)
 again = client.get(URL, headers=H).json()
 check("reopened review shows the corrected header values",
       again["invoice_number"] == "INV-001" and again["client_name"] == "Acme Ltd" and float(again["grand_total"]) == 250)
+check("supplier and customer are saved as separate fields",
+      again["supplier_name"] == "Northwind Supplies" and again["supplier_email"] == "ar@northwind.example"
+      and again["client_name"] == "Acme Ltd" and "supplier_name" in draft)
 check("reopened review shows the corrected line items, in order",
       [i["description"] for i in again["items"]] == ["Widget", "Delivery"] and float(again["items"][0]["qty"]) == 2)
 check("status is saved and the invoice count is unchanged",

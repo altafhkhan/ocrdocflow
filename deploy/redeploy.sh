@@ -12,11 +12,14 @@
 #   4. appends to the SERVER's backend/.env any OCR/promotion settings it
 #      does not have yet, copied from the local backend/.env; existing
 #      server values (DATABASE_URL, Stripe keys, ...) are never changed
-#   5. rebuilds + restarts the ocrdocflow-api container
+#   5. rebuilds the ocrdocflow-api image, applies database migrations,
+#      restarts the container
 #   6. checks the health endpoint and the plans endpoint on the live site
 #
-# No database migration step: the schema is managed outside this script
-# (see DEPLOY.md); this release needs no schema change.
+# Database: step 5 runs `alembic upgrade head` in the freshly built image
+# BEFORE the new code starts, so new columns exist when it needs them.
+# Migrations must therefore stay additive (the old code keeps running
+# against the new schema for a few seconds).
 set -euo pipefail
 
 HOST="${DEPLOY_HOST:-root@165.22.240.27}"
@@ -80,8 +83,8 @@ else
   echo "   server .env already has every key"
 fi
 
-echo "== 5/6 rebuilding API container"
-"${SSH[@]}" "cd '$REMOTE_DIR/deploy' && docker compose up -d --build && docker image prune -f >/dev/null && sleep 5 && docker ps --format '{{.Names}}  {{.Status}}' | grep ocrdocflow && docker logs --tail 5 ocrdocflow-api 2>&1 | tail -5"
+echo "== 5/6 rebuilding API container (and applying database migrations)"
+"${SSH[@]}" "cd '$REMOTE_DIR/deploy' && docker compose build && docker compose run --rm --no-deps ocrdocflow-api alembic upgrade head && docker compose up -d && docker image prune -f >/dev/null && sleep 5 && docker ps --format '{{.Names}}  {{.Status}}' | grep ocrdocflow && docker logs --tail 5 ocrdocflow-api 2>&1 | tail -5"
 
 echo "== 6/6 verifying live site (via $SITE_IP, in case DNS caches are stale)"
 # Informational only: a failed check must not abort the script (set -e).

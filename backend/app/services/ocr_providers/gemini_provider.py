@@ -91,15 +91,42 @@ _DOCUMENT_PROMPT = (
     "- invoice_number: the invoice / bill / receipt number.\n"
     "- invoice_date and due_date: exactly as written on the page.\n"
     "- currency: ISO code if shown or clearly implied (e.g. PKR, SAR, AED, USD); null if unknown.\n"
-    "- client_company, client_email, client_name: if the page has explicit labels "
-    "such as 'Client Company', 'Client Name' or 'Email', use the labelled values. "
-    "Otherwise: client_company is the company that ISSUED the document - the name "
-    "printed at the top (letterhead / seller), usually above its address, often "
-    "with no label; client_email is that issuing company's email address, even "
-    "when it has no 'Email' label (e.g. printed after the phone number, separated "
-    "by '|'); client_name is the name written under 'Bill To' / 'Billed To' / "
-    "'Customer' / 'Sold To' (the person, or the company when no person is named; "
-    "not an 'Attn:' line). Keep names in the original script, do not translate.\n"
+    "- supplier_name, supplier_email, client_company, client_name, client_email: "
+    "an invoice has two parties. Most invoices do NOT label these fields, so work "
+    "out who is who from the layout and meaning of the page, the way an "
+    "accountant would, and put each value in its proper field:\n"
+    "  * SUPPLIER = the party that ISSUED the document (seller / vendor / service "
+    "provider): the name in the letterhead or beside the logo, usually above its "
+    "own address, tax number and phone, normally also the 'Account Name' in the "
+    "bank details; or the value after a label such as 'Supplier', 'Vendor', "
+    "'Seller', 'From', 'Issued by'. supplier_name is that company (or person) "
+    "name. supplier_email is its email, labelled or not (often after the phone "
+    "number separated by '|', or in the footer).\n"
+    "  * CUSTOMER = the party the document is addressed to: the block under or "
+    "beside 'Bill To' / 'Billed To' / 'Invoice To' / 'Sold To' / 'Customer' / "
+    "'Client' / 'Buyer' / 'M/s' / 'To:' (or the same in another language), or, "
+    "with no heading at all, the name-and-address block that is not the "
+    "letterhead. client_company is the customer's company name. client_name is "
+    "the customer's contact person ('Attn', 'Attention', 'Contact', 'Client "
+    "Name', or a person's name in the block); when only a department or role is "
+    "given (e.g. 'Attn: Accounts Payable') use that. If the customer is a private "
+    "person with no company, put the person in client_name and null in "
+    "client_company. client_email is the customer's email.\n"
+    "  * An email belongs to the party whose block or name it is printed with. "
+    "Never copy the supplier's email into client_email or the customer's into "
+    "supplier_email; use null for a party that shows no email.\n"
+    "  * Fields the page labels 'Client Company', 'Client Name' or 'Client Email' "
+    "are the customer's; a bare 'Email' label belongs to the block it sits in.\n"
+    "  * A document that names only one party (a till receipt, a handwritten bill "
+    "with just a shop name) has a supplier and no customer company; a customer "
+    "name written on it by hand goes in client_name.\n"
+    "  * Example - letterhead 'Dunefield Office Supplies Co. ... Tel: +966 11 000 "
+    "0000 | accounts@dunefield.example' and a block 'BILL TO / Najdline Logistics "
+    "LLC / Attn: Accounts Payable' gives supplier_name 'Dunefield Office Supplies "
+    "Co.', supplier_email 'accounts@dunefield.example', client_company 'Najdline "
+    "Logistics LLC', client_name 'Accounts Payable', client_email null.\n"
+    "  * Every page of a multi-page invoice repeats the same parties. Keep names "
+    "in the original script, do not translate.\n"
     "- items: one entry per line item with description (original script), qty, "
     "unit_price and total_price as plain numbers (no thousands separators, no "
     "currency symbols); null for a missing number.\n"
@@ -128,6 +155,8 @@ _DOCUMENT_SCHEMA = {
                     "invoice_date": _NULLABLE_STR,
                     "due_date": _NULLABLE_STR,
                     "currency": _NULLABLE_STR,
+                    "supplier_name": _NULLABLE_STR,
+                    "supplier_email": _NULLABLE_STR,
                     "client_name": _NULLABLE_STR,
                     "client_company": _NULLABLE_STR,
                     "client_email": _NULLABLE_STR,
@@ -150,6 +179,7 @@ _DOCUMENT_SCHEMA = {
                     },
                 },
                 "required": ["invoice_number", "invoice_date", "due_date", "currency",
+                             "supplier_name", "supplier_email",
                              "client_name", "client_company", "client_email",
                              "sub_total", "tax", "discount", "grand_total", "items"],
             },
@@ -159,6 +189,7 @@ _DOCUMENT_SCHEMA = {
 }
 
 _HEADER_STR_FIELDS = ("invoice_number", "invoice_date", "due_date", "currency",
+                      "supplier_name", "supplier_email",
                       "client_name", "client_company", "client_email")
 _HEADER_NUM_FIELDS = ("sub_total", "tax", "discount", "grand_total")
 

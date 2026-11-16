@@ -93,6 +93,7 @@ def export_csv(
         )
         header_cells = [
             inv.invoice_number, inv.invoice_date, inv.due_date, inv.currency,
+            inv.supplier_name, inv.supplier_email,
             inv.client_name, inv.client_company, inv.client_email,
         ]
         totals_cells = [inv.sub_total, inv.tax, inv.discount, inv.grand_total]

@@ -312,10 +312,11 @@ def _is_rtl_segment(lines: list[str]) -> bool:
 # --- Fallbacks for invoices WITHOUT "Client Name:/Client Company:" labels ---
 # Many supplier invoices print the issuing company at the top with no label
 # (letterhead), its email after the phone number with no "Email" label, and
-# the customer under "Bill To". Agreed field mapping for those layouts:
-#   client_company = issuing company at the top
-#   client_email   = that company's email (first email near the top)
-#   client_name    = the name under "Bill To" (company if no person is named)
+# the customer under "Bill To". Field mapping for those layouts:
+#   supplier_name  = issuing company at the top
+#   supplier_email = that company's email (first email near the top)
+#   client_company = the name under "Bill To"
+#   client_name    = the "Attn:" person or department, when there is one
 _COMPANY_SUFFIX_RE = re.compile(
     r"\b(?:co|company|llc|l\.l\.c|ltd|limited|inc|w\.l\.l|b\.s\.c|trading|group|"
     r"est|establishment|corp|corporation|plc|gmbh|pvt|smc)\b\.?|شركة|مؤسسة",
@@ -364,11 +365,24 @@ def _find_bill_to_name(lines: list[str], window: int = 6) -> Optional[str]:
     return None
 
 
-def _first_email(lines: list[str]) -> Optional[str]:
+def _first_email(lines: list[str], exclude: Optional[str] = None) -> Optional[str]:
     for line in lines:
-        m = re.search(_EMAIL_RE, line)
+        for m in re.finditer(_EMAIL_RE, line):
+            # Form templates pad the value with underscores ("___a@b.com___").
+            email = m.group(0).strip("_")
+            if not exclude or (exclude not in email and email not in exclude):
+                return email
+    return None
+
+
+_ATTN_RE = re.compile(r"^\s*(?:attn|attention|kind\s+attn|contact(?:\s+person)?)\b\.?\s*:?\s*(.+)$", re.IGNORECASE)
+
+
+def _find_attention(lines: list[str]) -> Optional[str]:
+    for line in lines:
+        m = _ATTN_RE.match(line)
         if m:
-            return m.group(0)
+            return _clean(m.group(1))
     return None
 
 
@@ -385,6 +399,8 @@ def _parse_single_invoice(lines: list[str], lead_in: Optional[list[str]] = None)
         "invoice_date": _find_value_near_label(lines, [r"invoice date", r"تاريخ\s*الفاتورة"], _DATE_RE, prefer_backward=rtl),
         "due_date": _find_value_near_label(lines, [r"due date", r"تاريخ\s*الاستحقاق"], _DATE_RE, prefer_backward=rtl),
         "currency": _find_value_near_label(lines, [r"currency", r"العملة"], _CURRENCY_RE, prefer_backward=rtl),
+        "supplier_name": _find_freetext_near_label(lines, [r"(?:supplier|vendor|seller)(?:\s*name)?\s*:", r"اسم\s*المورد"], prefer_backward=rtl),
+        "supplier_email": None,
         "client_name": _find_freetext_near_label(lines, [r"client name", r"اسم\s*العميل"], prefer_backward=rtl),
         "client_company": _find_freetext_near_label(lines, [r"client company", r"اسم\s*الشركة"], prefer_backward=rtl),
         "client_email": _find_value_near_label(lines, [r"email\s*/?\s*phone", r"لكتروني"], _EMAIL_RE, prefer_backward=rtl),
@@ -399,16 +415,24 @@ def _parse_single_invoice(lines: list[str], lead_in: Optional[list[str]] = None)
     # number, phone) sits above the "TAX INVOICE" title, or is read
     # on the same row as, and so just before, the "TAX INVOICE" title.
     head = list(reversed(lead_in or [])) + lines[:12]
+    if not header["supplier_name"]:
+        header["supplier_name"] = _find_top_company(head)
     if not header["client_company"]:
-        header["client_company"] = _find_top_company(head)
-    if not header["client_email"]:
-        header["client_email"] = _first_email(head) or _first_email(lines)
+        header["client_company"] = _find_bill_to_name(lines)
     if not header["client_name"]:
-        header["client_name"] = _find_bill_to_name(lines)
+        header["client_name"] = _find_attention(lines)
+    # The same company cannot be both parties (a labelled 'Client Company'
+    # at the very top would otherwise be picked up as the letterhead too).
+    if header["supplier_name"] and header["supplier_name"] in (header["client_company"], header["client_name"]):
+        header["supplier_name"] = None
+    # Any email that is not the customer's labelled one is the supplier's.
+    header["supplier_email"] = (_first_email(head, exclude=header["client_email"])
+                                or _first_email(lines, exclude=header["client_email"]))
 
     # Clean up the OCR spacing artifact around "@" - e.g. "abc @ gmail.com"
-    if header["client_email"]:
-        header["client_email"] = re.sub(r"\s+", "", header["client_email"])
+    for key in ("client_email", "supplier_email"):
+        if header[key]:
+            header[key] = re.sub(r"\s+", "", header[key])
 
     items = _parse_line_items(lines)
 

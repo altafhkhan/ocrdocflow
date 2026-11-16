@@ -27,6 +27,8 @@ interface Labels {
   currency: string;
   invoiceDate: string;
   dueDate: string;
+  supplierName: string;
+  supplierEmail: string;
   clientName: string;
   clientCompany: string;
   clientEmail: string;
@@ -65,6 +67,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "Currency",
     invoiceDate: "Invoice Date",
     dueDate: "Due Date",
+    supplierName: "Supplier",
+    supplierEmail: "Supplier Email",
     clientName: "Client Name",
     clientCompany: "Client Company",
     clientEmail: "Client Email",
@@ -98,9 +102,11 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "العملة",
     invoiceDate: "تاريخ الفاتورة",
     dueDate: "تاريخ الاستحقاق",
+    supplierName: "اسم المورد",
+    supplierEmail: "بريد المورد الإلكتروني",
     clientName: "اسم العميل",
-    clientCompany: "اسم الشركة",
-    clientEmail: "البريد الإلكتروني",
+    clientCompany: "شركة العميل",
+    clientEmail: "بريد العميل الإلكتروني",
     lineItems: "بنود الفاتورة",
     description: "الوصف",
     qty: "الكمية",
@@ -131,6 +137,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "کرنسی",
     invoiceDate: "انوائس کی تاریخ",
     dueDate: "ادائیگی کی آخری تاریخ",
+    supplierName: "سپلائر کا نام",
+    supplierEmail: "سپلائر کا ای میل",
     clientName: "گاہک کا نام",
     clientCompany: "گاہک کی کمپنی",
     clientEmail: "گاہک کا ای میل",
@@ -164,6 +172,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "Devise",
     invoiceDate: "Date de facture",
     dueDate: "Date d'échéance",
+    supplierName: "Fournisseur",
+    supplierEmail: "E-mail du fournisseur",
     clientName: "Nom du client",
     clientCompany: "Société du client",
     clientEmail: "E-mail du client",
@@ -197,6 +207,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "Währung",
     invoiceDate: "Rechnungsdatum",
     dueDate: "Fälligkeitsdatum",
+    supplierName: "Lieferant",
+    supplierEmail: "Lieferanten-E-Mail",
     clientName: "Kundenname",
     clientCompany: "Kundenfirma",
     clientEmail: "Kunden-E-Mail",
@@ -230,6 +242,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "Moneda",
     invoiceDate: "Fecha de factura",
     dueDate: "Fecha de vencimiento",
+    supplierName: "Proveedor",
+    supplierEmail: "Correo del proveedor",
     clientName: "Nombre del cliente",
     clientCompany: "Empresa del cliente",
     clientEmail: "Correo del cliente",
@@ -263,6 +277,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "Valuta",
     invoiceDate: "Factuurdatum",
     dueDate: "Vervaldatum",
+    supplierName: "Leverancier",
+    supplierEmail: "E-mail leverancier",
     clientName: "Naam klant",
     clientCompany: "Bedrijf klant",
     clientEmail: "E-mail klant",
@@ -296,6 +312,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "币种",
     invoiceDate: "开票日期",
     dueDate: "到期日",
+    supplierName: "供应商",
+    supplierEmail: "供应商邮箱",
     clientName: "客户姓名",
     clientCompany: "客户公司",
     clientEmail: "客户邮箱",
@@ -329,6 +347,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "通貨",
     invoiceDate: "請求日",
     dueDate: "支払期限",
+    supplierName: "仕入先",
+    supplierEmail: "仕入先のメール",
     clientName: "顧客名",
     clientCompany: "顧客の会社名",
     clientEmail: "顧客のメール",
@@ -362,6 +382,8 @@ const TRANSLATIONS: Record<string, Labels> = {
     currency: "통화",
     invoiceDate: "청구일",
     dueDate: "지급 기한",
+    supplierName: "공급업체",
+    supplierEmail: "공급업체 이메일",
     clientName: "고객명",
     clientCompany: "고객 회사",
     clientEmail: "고객 이메일",
@@ -609,8 +631,10 @@ export default function ReviewModal({ documentId, language, onClose, onSaved }: 
                   <Field label={t.currency} value={data.currency} onChange={(v) => updateField("currency", v)} dir={dir} />
                   <Field label={t.invoiceDate} value={data.invoice_date} onChange={(v) => updateField("invoice_date", v)} dir={dir} />
                   <Field label={t.dueDate} value={data.due_date} onChange={(v) => updateField("due_date", v)} dir={dir} />
-                  <Field label={t.clientName} value={data.client_name} onChange={(v) => updateField("client_name", v)} dir={dir} />
+                  <Field label={t.supplierName} value={data.supplier_name} onChange={(v) => updateField("supplier_name", v)} dir={dir} />
+                  <Field label={t.supplierEmail} value={data.supplier_email} onChange={(v) => updateField("supplier_email", v)} dir={dir} />
                   <Field label={t.clientCompany} value={data.client_company} onChange={(v) => updateField("client_company", v)} dir={dir} />
+                  <Field label={t.clientName} value={data.client_name} onChange={(v) => updateField("client_name", v)} dir={dir} />
                   <Field label={t.clientEmail} value={data.client_email} onChange={(v) => updateField("client_email", v)} dir={dir} />
                 </div>
 
