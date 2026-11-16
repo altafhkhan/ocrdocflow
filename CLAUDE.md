@@ -4,8 +4,7 @@ SaaS document-processing product by Qumaxa, live at
 https://ocrdocflow.qumaxa.com since 2026-09-14. Users upload scanned
 invoices/vouchers (PDF/JPG/PNG, ≤10 MB, ≤10 pages); the app OCRs them
 (PaddleOCR, English/Arabic), extracts invoice fields with rule-based
-logic (supplier and customer as separate fields, dates, line items, totals,
-multi-invoice per document),
+logic (vendor, dates, line items, totals, multi-invoice per document),
 and lets the team review and export. Org-based multi-tenancy, team
 members, usage quotas, a no-login visitor tier, admin panel + audit log,
 rate limiting, Stripe subscriptions (starter/professional/business).

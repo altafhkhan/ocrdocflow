@@ -265,8 +265,7 @@ export default function VisitorPage() {
             <div className="grid grid-cols-2 gap-2 text-sm mb-4">
               <div><span className="text-gray-500">Invoice Number:</span> {viewingExtraction.invoice_number || "—"}</div>
               <div><span className="text-gray-500">Invoice Date:</span> {viewingExtraction.invoice_date || "—"}</div>
-              <div><span className="text-gray-500">Supplier:</span> {viewingExtraction.supplier_name || "—"}</div>
-              <div><span className="text-gray-500">Client:</span> {viewingExtraction.client_company || viewingExtraction.client_name || "—"}</div>
+              <div><span className="text-gray-500">Client/Supplier Name:</span> {viewingExtraction.client_name || "—"}</div>
               <div><span className="text-gray-500">Grand Total:</span> {viewingExtraction.grand_total ?? "—"}</div>
             </div>
             <table className="w-full text-sm">

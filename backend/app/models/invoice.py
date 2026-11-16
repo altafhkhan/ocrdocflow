@@ -30,11 +30,6 @@ class Invoice(Base):
     due_date = Column(String, nullable=True)
     currency = Column(String, nullable=True)
 
-    # The company that ISSUED the invoice (seller / vendor) and its email.
-    supplier_name = Column(String, nullable=True)
-    supplier_email = Column(String, nullable=True)
-
-    # The customer the invoice is addressed to ("Bill To").
     client_name = Column(String, nullable=True)
     client_company = Column(String, nullable=True)
     client_email = Column(String, nullable=True)

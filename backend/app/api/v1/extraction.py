@@ -128,8 +128,6 @@ def get_extraction(
             "invoice_date": saved.invoice_date,
             "due_date": saved.due_date,
             "currency": saved.currency,
-            "supplier_name": saved.supplier_name,
-            "supplier_email": saved.supplier_email,
             "client_name": saved.client_name,
             "client_company": saved.client_company,
             "client_email": saved.client_email,
@@ -178,8 +176,6 @@ def get_extraction(
         "invoice_date": header.invoice_date,
         "due_date": header.due_date,
         "currency": header.currency,
-        "supplier_name": header.supplier_name,
-        "supplier_email": header.supplier_email,
         "client_name": header.client_name,
         "client_company": header.client_company,
         "client_email": header.client_email,
@@ -232,8 +228,6 @@ def confirm_extraction(
     invoice.invoice_date = payload.invoice_date
     invoice.due_date = payload.due_date
     invoice.currency = payload.currency
-    invoice.supplier_name = payload.supplier_name
-    invoice.supplier_email = payload.supplier_email
     invoice.client_name = payload.client_name
     invoice.client_company = payload.client_company
     invoice.client_email = payload.client_email

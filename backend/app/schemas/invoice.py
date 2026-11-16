@@ -19,8 +19,6 @@ class InvoiceConfirmIn(BaseModel):
     invoice_date: Optional[str] = None
     due_date: Optional[str] = None
     currency: Optional[str] = None
-    supplier_name: Optional[str] = None
-    supplier_email: Optional[str] = None
     client_name: Optional[str] = None
     client_company: Optional[str] = None
     client_email: Optional[str] = None

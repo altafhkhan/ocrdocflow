@@ -323,8 +323,6 @@ def get_visitor_extraction(
         "invoice_date": header.invoice_date,
         "due_date": header.due_date,
         "currency": header.currency,
-        "supplier_name": header.supplier_name,
-        "supplier_email": header.supplier_email,
         "client_name": header.client_name,
         "client_company": header.client_company,
         "client_email": header.client_email,
@@ -390,7 +388,6 @@ def visitor_csv(
             )
             header_cells = [
                 h.invoice_number, h.invoice_date, h.due_date, h.currency,
-                h.supplier_name, h.supplier_email,
                 h.client_name, h.client_company, h.client_email,
             ]
             totals_cells = [h.sub_total, h.tax, h.discount, h.grand_total]
