@@ -14,6 +14,7 @@ If a cloud engine fails (network, quota...) and OCR_FALLBACK_TO_PADDLE is
 on, we fall back to the local PaddleOCR engine so an upload still works.
 """
 import logging
+import threading
 
 import fitz  # PyMuPDF - reads PDF files
 from PIL import Image
@@ -25,6 +26,15 @@ logger = logging.getLogger(__name__)
 
 # Engines are built once and reused (PaddleOCR model loading is slow).
 _providers: dict[str, OCRProvider] = {}
+_providers_lock = threading.Lock()
+
+# Upload endpoints run in worker threads, so several documents can be in
+# OCR at once. This caps how many (memory: page images; and the cloud
+# engine's rate limit); the rest wait here without blocking the server.
+_ocr_slots = threading.BoundedSemaphore(max(1, settings.OCR_MAX_CONCURRENT))
+# The local PaddleOCR engine is CPU/memory heavy and not safe to call from
+# two threads at once - one document at a time through it.
+_paddle_lock = threading.Lock()
 
 
 def get_pdf_page_count(file_path: str) -> int:
@@ -59,15 +69,21 @@ def load_page_images(file_path: str, real_type: str) -> list[Image.Image]:
 
 def get_provider(name: str | None = None) -> OCRProvider:
     name = (name or settings.OCR_PROVIDER or "paddle").lower()
-    if name not in _providers:
-        _providers[name] = build_provider(
-            name,
-            api_key=settings.GEMINI_API_KEY if name == "gemini" else settings.AZURE_DI_KEY,
-            model=settings.GEMINI_MODEL,
-            fallback_models=settings.GEMINI_FALLBACK_MODELS,
-            endpoint=settings.AZURE_DI_ENDPOINT,
-        )
-    return _providers[name]
+    with _providers_lock:
+        if name not in _providers:
+            _providers[name] = build_provider(
+                name,
+                api_key=settings.GEMINI_API_KEY if name == "gemini" else settings.AZURE_DI_KEY,
+                model=settings.GEMINI_MODEL,
+                fallback_models=settings.GEMINI_FALLBACK_MODELS,
+                endpoint=settings.AZURE_DI_ENDPOINT,
+            )
+        return _providers[name]
+
+
+def _paddle_pages(images: list[Image.Image], language: str) -> list[str]:
+    with _paddle_lock:
+        return get_provider("paddle").extract_pages(images, language)
 
 
 def join_pages(pages: list[str]) -> str:
@@ -96,24 +112,28 @@ def extract_document(file_path: str, real_type: str, language: str
     Raises an exception if OCR fails - the caller is responsible for
     catching it and marking the document as "failed".
     """
-    images = load_page_images(file_path, real_type)
-    name = (settings.OCR_PROVIDER or "paddle").lower()
-    invoices = None
-    detected = None
-    try:
-        provider = get_provider(name)
-        if hasattr(provider, "extract_document"):
-            pages, invoices, detected = provider.extract_document(images, language)
-        else:
-            pages = provider.extract_pages(images, language)
-    except OCRProviderError as e:
-        if name == "paddle" or not settings.OCR_FALLBACK_TO_PADDLE:
-            raise
-        logger.warning("OCR provider %s failed (%s); falling back to paddle", name, e)
-        pages = get_provider("paddle").extract_pages(images, language)
+    with _ocr_slots:
+        images = load_page_images(file_path, real_type)
+        name = (settings.OCR_PROVIDER or "paddle").lower()
         invoices = None
         detected = None
-    return join_pages(pages), len(images), invoices, detected
+        try:
+            if name == "paddle":
+                pages = _paddle_pages(images, language)
+            else:
+                provider = get_provider(name)
+                if hasattr(provider, "extract_document"):
+                    pages, invoices, detected = provider.extract_document(images, language)
+                else:
+                    pages = provider.extract_pages(images, language)
+        except OCRProviderError as e:
+            if name == "paddle" or not settings.OCR_FALLBACK_TO_PADDLE:
+                raise
+            logger.warning("OCR provider %s failed (%s); falling back to paddle", name, e)
+            pages = _paddle_pages(images, language)
+            invoices = None
+            detected = None
+        return join_pages(pages), len(images), invoices, detected
 
 
 def extract_text(file_path: str, real_type: str, language: str) -> tuple[str, int]:

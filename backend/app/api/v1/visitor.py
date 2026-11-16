@@ -105,7 +105,7 @@ def _cleanup_abandoned_visitor_data(db: Session) -> None:
 
 
 @router.post("/upload")
-async def visitor_upload(
+def visitor_upload(
     request: Request,
     file: UploadFile = File(...),
     language: str = Form("en"),
@@ -113,11 +113,14 @@ async def visitor_upload(
     email: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
+    # A plain `def` (not `async def`) on purpose: FastAPI runs it in a worker
+    # thread, so the seconds spent waiting on OCR do not freeze the server
+    # for everyone else. ocr_service caps how many run at once.
     _cleanup_abandoned_visitor_data(db)
 
     ip = _get_client_ip(request)
 
-    contents = await file.read()
+    contents = file.file.read()
     max_bytes = VISITOR_MAX_FILE_MB * 1024 * 1024
     if len(contents) > max_bytes:
         raise HTTPException(
@@ -206,6 +209,10 @@ async def visitor_upload(
     db.add(document)
     db.commit()
     db.refresh(document)
+
+    # End the open read transaction so this request does not sit on a
+    # pooled database connection for the whole OCR wait.
+    db.commit()
 
     try:
         text, page_count, invoices, _detected = ocr_service.extract_document(stored_path, real_type, language)

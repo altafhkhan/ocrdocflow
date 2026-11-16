@@ -11,7 +11,9 @@ rate limiting, Stripe subscriptions (starter/professional/business).
 
 ## Current honest scope — keep this straight in any copy or decisions
 - Billing is wired but in **Stripe test mode**: launched free/beta, not charging.
-- OCR runs **synchronously** (no job queue) — not built for many concurrent users.
+- OCR runs **inside the upload request** (no job queue): up to
+  `OCR_MAX_CONCURRENT` (default 6) documents at once, the rest wait their
+  turn. No batch upload — not built for heavy concurrent volume.
 - Extraction is **rule-based**; no LLM document understanding yet.
 - Password reset: emailed single-use link, sent over SMTP (own mailbox)
   or Resend, whichever is configured. With neither set on the server the

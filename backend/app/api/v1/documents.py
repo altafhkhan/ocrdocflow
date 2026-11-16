@@ -72,18 +72,21 @@ def _clear_abandoned_staging(db: Session, current_user: User, keep_document_id: 
 
 
 @router.post("/upload")
-async def upload_document(
+def upload_document(
     file: UploadFile = File(...),
     language: str = Form("en"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # A plain `def` (not `async def`) on purpose: FastAPI runs it in a worker
+    # thread, so the seconds spent waiting on OCR do not freeze the server
+    # for everyone else. ocr_service caps how many run at once.
     # Plan quota check - BEFORE spending time/memory on OCR. Checks the
     # user's ORGANIZATION quota (usage is pooled across all members of
     # the org). Admins are exempt (see usage_service.check_quota_before_upload).
     usage_service.check_quota_before_upload(db, current_user)
 
-    contents = await file.read()
+    contents = file.file.read()
 
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     if len(contents) > max_bytes:
@@ -149,10 +152,13 @@ async def upload_document(
     org = current_user.organization
     usage_before = usage_service.get_usage_this_period(db, org) if org else 0
 
-    # Phase 2 MVP: run OCR right here, synchronously. For a beginner-friendly
-    # first version this is fine (uploads are one-at-a-time, small files).
-    # A real production system would hand this off to a background job queue
-    # so the upload request returns instantly - that's a later improvement.
+    # End the open read transaction so this request does not sit on a
+    # pooled database connection for the whole OCR wait.
+    db.commit()
+
+    # OCR runs inside this request (the response waits for it), but several
+    # requests can be in OCR at the same time. A background job queue, so
+    # the upload returns instantly, is a later improvement.
     try:
         text, page_count, invoices, detected = ocr_service.extract_document(stored_path, real_type, language)
         document.ocr_text = text

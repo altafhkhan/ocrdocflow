@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     # If a cloud engine errors out, retry the document with local PaddleOCR
     # instead of failing the upload.
     OCR_FALLBACK_TO_PADDLE: bool = True
+    # How many documents may be in OCR at the same moment. Further uploads
+    # wait their turn (other requests are not held up). Each document in
+    # progress keeps its page images in memory (up to ~120 MB for a
+    # 10-page PDF), so raise this only with memory to spare.
+    OCR_MAX_CONCURRENT: int = 6
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.6-flash"
     # Tried in order when the main model answers 429 (quota) or 503 (busy);
