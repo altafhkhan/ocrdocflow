@@ -64,7 +64,9 @@ _PAGE_MARKER_RE = re.compile(r"^-{2,}\s*Page\s+\d+\s*-{2,}$", re.IGNORECASE)
 # because splitting at "Invoice No." leaves the preceding title/company
 # lines stranded at the END of the PREVIOUS invoice's segment instead of
 # the start of their own - confirmed with a real multi-page test file.
-_INVOICE_TITLE_RE = re.compile(r"^invoice$", re.IGNORECASE)
+_INVOICE_TITLE_RE = re.compile(
+    r"^(?:simplified\s+)?(?:tax\s+)?invoice$|^فاتورة(?:\s+ضريبية)?(?:\s+مبسطة)?$",
+    re.IGNORECASE)
 _INVOICE_NO_LABEL_RE = re.compile(r"^invoice\s*no", re.IGNORECASE)
 
 
@@ -89,14 +91,21 @@ def _split_into_invoice_segments(lines: list[str]) -> list[list[str]]:
     else:
         starts = [i for i, line in enumerate(lines) if _INVOICE_NO_LABEL_RE.match(line.strip())]
 
-    if not starts:
-        return [lines]
+    return [lines[a:b] for a, b in _segment_bounds(lines, starts)]
 
-    segments = []
-    for idx, start in enumerate(starts):
-        end = starts[idx + 1] if idx + 1 < len(starts) else len(lines)
-        segments.append(lines[start:end])
-    return segments
+
+def _segment_bounds(lines: list[str], starts: list[int]) -> list[tuple[int, int]]:
+    if not starts:
+        return [(0, len(lines))]
+    return [(start, starts[idx + 1] if idx + 1 < len(starts) else len(lines))
+            for idx, start in enumerate(starts)]
+
+
+def _segment_starts(lines: list[str]) -> list[int]:
+    title_starts = [i for i, line in enumerate(lines) if _INVOICE_TITLE_RE.match(line.strip())]
+    if len(title_starts) >= 2:
+        return title_starts
+    return [i for i, line in enumerate(lines) if _INVOICE_NO_LABEL_RE.match(line.strip())]
 
 
 def _clean(value: Optional[str]) -> Optional[str]:
@@ -300,7 +309,70 @@ def _is_rtl_segment(lines: list[str]) -> bool:
     return len(_ARABIC_CHAR_RE.findall(text)) > len(_LATIN_CHAR_RE.findall(text))
 
 
-def _parse_single_invoice(lines: list[str]) -> dict:
+# --- Fallbacks for invoices WITHOUT "Client Name:/Client Company:" labels ---
+# Many supplier invoices print the issuing company at the top with no label
+# (letterhead), its email after the phone number with no "Email" label, and
+# the customer under "Bill To". Agreed field mapping for those layouts:
+#   client_company = issuing company at the top
+#   client_email   = that company's email (first email near the top)
+#   client_name    = the name under "Bill To" (company if no person is named)
+_COMPANY_SUFFIX_RE = re.compile(
+    r"\b(?:co|company|llc|l\.l\.c|ltd|limited|inc|w\.l\.l|b\.s\.c|trading|group|"
+    r"est|establishment|corp|corporation|plc|gmbh|pvt|smc)\b\.?|شركة|مؤسسة",
+    re.IGNORECASE)
+_BILL_TO_RE = re.compile(
+    r"^\s*(?:bill(?:ed)?\s*to|sold\s*to|invoice\s*to|customer)\b\s*:?\s*(.*)$|^\s*(?:فاتورة\s*إلى|العميل)\s*:?\s*(.*)$",
+    re.IGNORECASE)
+_NOT_A_NAME_RE = re.compile(
+    r"ship\s*to|reference|^attn\b|^attention\b|^page\s+\d|@|^\+?\d[\d\s-]{5,}$",
+    re.IGNORECASE)
+
+
+def _looks_like_name(line: str) -> bool:
+    if not line or ":" in line or _LABEL_LINE_RE.search(line) or _NOT_A_NAME_RE.search(line):
+        return False
+    if _INVOICE_TITLE_RE.match(line) or len(line.split()) > 7:
+        return False
+    letters = len(re.findall(r"[A-Za-z\u0600-\u06FF]", line))
+    digits = len(re.findall(r"\d", line))
+    return letters >= 3 and digits <= letters // 3
+
+
+def _find_top_company(head_lines: list[str]) -> Optional[str]:
+    """Issuing company at the top of the invoice: prefer a short line with a
+    company suffix (Co., LLC, W.L.L., ...), else the first name-like line."""
+    candidates = [_clean(l) for l in head_lines]
+    candidates = [c for c in candidates if c and _looks_like_name(c)]
+    for c in candidates:
+        if _COMPANY_SUFFIX_RE.search(c):
+            return c
+    return candidates[0] if candidates else None
+
+
+def _find_bill_to_name(lines: list[str], window: int = 6) -> Optional[str]:
+    for i, line in enumerate(lines):
+        m = _BILL_TO_RE.match(line.strip())
+        if not m:
+            continue
+        inline = _clean(m.group(1) or m.group(2))
+        if inline and _looks_like_name(inline):
+            return inline
+        for j in range(i + 1, min(i + 1 + window, len(lines))):
+            candidate = _clean(lines[j])
+            if candidate and _looks_like_name(candidate):
+                return candidate
+    return None
+
+
+def _first_email(lines: list[str]) -> Optional[str]:
+    for line in lines:
+        m = re.search(_EMAIL_RE, line)
+        if m:
+            return m.group(0)
+    return None
+
+
+def _parse_single_invoice(lines: list[str], lead_in: Optional[list[str]] = None) -> dict:
     """
     Extracts header fields + line items from a chunk of lines assumed to
     represent ONE invoice. Any field that couldn't be found is simply
@@ -321,6 +393,18 @@ def _parse_single_invoice(lines: list[str]) -> dict:
         "discount": _parse_money(_find_value_near_label(lines, [r"discount", r"الخصم"], _MONEY_RE, prefer_backward=rtl)),
         "grand_total": _parse_money(_find_value_near_label(lines, [r"grand\s*total", r"كلي"], _MONEY_RE, prefer_backward=rtl)),
     }
+
+    # Unlabelled layouts (see the fallback helpers above). `lead_in` holds the
+    # few lines just before this segment: the letterhead (company, address, tax
+    # number, phone) sits above the "TAX INVOICE" title, or is read
+    # on the same row as, and so just before, the "TAX INVOICE" title.
+    head = list(reversed(lead_in or [])) + lines[:12]
+    if not header["client_company"]:
+        header["client_company"] = _find_top_company(head)
+    if not header["client_email"]:
+        header["client_email"] = _first_email(head) or _first_email(lines)
+    if not header["client_name"]:
+        header["client_name"] = _find_bill_to_name(lines)
 
     # Clean up the OCR spacing artifact around "@" - e.g. "abc @ gmail.com"
     if header["client_email"]:
@@ -351,8 +435,9 @@ def parse_invoices_from_text(ocr_text: str) -> list[dict]:
     was found (falls back to treating the whole document as one invoice).
     """
     lines = [l for l in ocr_text.splitlines() if not _PAGE_MARKER_RE.match(l.strip())]
-    segments = _split_into_invoice_segments(lines)
-    return [_parse_single_invoice(segment) for segment in segments]
+    bounds = _segment_bounds(lines, _segment_starts(lines))
+    return [_parse_single_invoice(lines[a:b], lead_in=lines[max(0, a - 5):a])
+            for a, b in bounds]
 
 
 if __name__ == "__main__":
