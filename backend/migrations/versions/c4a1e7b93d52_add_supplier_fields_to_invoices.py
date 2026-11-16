@@ -19,7 +19,7 @@ down_revision: Union[str, None] = '22b9c16345b2'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_TABLES = ('extracted_invoice_headers', 'invoices')
+_TABLES = ('extracted_invoice_header', 'invoices')
 
 
 def upgrade() -> None:
