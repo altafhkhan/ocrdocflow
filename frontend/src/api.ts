@@ -95,11 +95,25 @@ export interface UploadResult {
   notices?: string[];
 }
 
+// An upload can run for a minute or more. If the connection drops or the
+// server gives up, the browser only says "Failed to fetch" - say something
+// a person can act on instead. (Seen most on phones.)
+async function sendUpload(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new Error(
+      "The upload did not finish: the connection dropped or the server took too long. " +
+        "Check your internet connection and try again.",
+    );
+  }
+}
+
 export async function uploadDocument(file: File, language: string): Promise<UploadResult> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("language", language);
-  const res = await fetch(`${API_BASE}/api/v1/documents/upload`, {
+  const res = await sendUpload(`${API_BASE}/api/v1/documents/upload`, {
     method: "POST",
     headers: { Authorization: `Bearer ${getToken()}` },
     body: formData,
@@ -456,7 +470,7 @@ export async function visitorUpload(
   formData.append("session_id", getOrCreateVisitorSessionId());
   if (email) formData.append("email", email);
 
-  const res = await fetch(`${API_BASE}/api/v1/visitor/upload`, {
+  const res = await sendUpload(`${API_BASE}/api/v1/visitor/upload`, {
     method: "POST",
     body: formData,
   });
