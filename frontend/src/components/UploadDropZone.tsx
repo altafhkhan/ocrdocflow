@@ -1,6 +1,9 @@
 import { useRef, useState } from "react";
+import { isNativeApp, shrinkPhoto } from "../native";
 
 const ACCEPTED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
+// The phone file pickers match on type names rather than on extensions.
+const ACCEPT = [...ACCEPTED_EXTENSIONS, "application/pdf", "image/jpeg", "image/png"].join(",");
 
 interface Props {
   /** The page keeps this ref so it can clear the input after an upload. */
@@ -78,6 +81,7 @@ export default function UploadDropZone({ inputRef, disabled, busy, idleText, onF
       : "border-gray-300 cursor-pointer hover:border-blue-400 text-gray-600";
 
   return (
+    <>
     <label
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
@@ -88,7 +92,7 @@ export default function UploadDropZone({ inputRef, disabled, busy, idleText, onF
       <input
         ref={inputRef}
         type="file"
-        accept={ACCEPTED_EXTENSIONS.join(",")}
+        accept={ACCEPT}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -96,7 +100,37 @@ export default function UploadDropZone({ inputRef, disabled, busy, idleText, onF
         }}
         disabled={disabled}
       />
-      {busy ? "Working on it..." : dragging ? "Drop the file to upload it" : idleText}
+      {busy
+        ? "Working on it..."
+        : dragging
+          ? "Drop the file to upload it"
+          : isNativeApp
+            ? "Tap to choose a PDF or image invoice"
+            : idleText}
     </label>
+    {/* Android/iOS app only: photograph a paper invoice with the camera. */}
+    {isNativeApp && (
+      <label
+        className={`mt-2 block rounded-lg border p-3 text-center text-sm font-medium ${
+          disabled ? "border-gray-200 text-gray-400" : "border-blue-600 text-blue-700 cursor-pointer"
+        }`}
+      >
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          disabled={disabled}
+          onChange={async (e) => {
+            const input = e.currentTarget;
+            const photo = input.files?.[0];
+            input.value = "";
+            if (photo) onFile(await shrinkPhoto(photo));
+          }}
+        />
+        Take a photo of the invoice
+      </label>
+    )}
+    </>
   );
 }

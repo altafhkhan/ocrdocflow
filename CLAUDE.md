@@ -43,6 +43,12 @@ rate limiting, Stripe subscriptions (starter/professional/business).
   `src/pages/` (Dashboard, Login, Register, Billing, Team, Admin, Visitor);
   API client in `src/api.ts`. Production build calls same-origin `/api/...`
   (`.env.production` sets `VITE_API_BASE_URL=`).
+- **Mobile apps**: `frontend/android/` and `frontend/ios/` wrap the same
+  web app with Capacitor (app ID `com.qumaxa.ocrdocflow`); app-only
+  behaviour lives in `frontend/src/native.ts`. The apps are sign-in only
+  and sell nothing (plans are bought on the website; no in-app purchase).
+  Setup, signing and store steps: `deploy/MOBILE.md`, which also records
+  what has and has not been built or tested.
 - `deploy/` — Dockerfile + compose for the API only. It joins the AR
   Console's `deploy_default` Docker network and is fronted by the
   Console's nginx (container name `ocrdocflow-api` is fixed; never rename

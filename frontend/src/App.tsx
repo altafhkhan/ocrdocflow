@@ -8,6 +8,8 @@ import AdminPanel from "./pages/AdminPanel";
 import VisitorPage from "./pages/VisitorPage";
 import BillingPage from "./pages/BillingPage";
 import TeamPage from "./pages/TeamPage";
+import MobileBillingPage from "./pages/MobileBillingPage";
+import { isNativeApp } from "./native";
 
 export default function App() {
   return (
@@ -20,7 +22,8 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/admin" element={<AdminPanel />} />
-        <Route path="/billing" element={<BillingPage />} />
+        {/* The apps never sell plans (no Apple/Google purchase): plans are bought on the website. */}
+        <Route path="/billing" element={isNativeApp ? <MobileBillingPage /> : <BillingPage />} />
         <Route path="/team" element={<TeamPage />} />
       </Routes>
     </BrowserRouter>

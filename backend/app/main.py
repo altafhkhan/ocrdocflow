@@ -12,10 +12,19 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS: allows the React frontend (running on a different port/domain) to call this API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://ocrdocflow.qumaxa.com"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://ocrdocflow.qumaxa.com",
+        # The Android and iOS apps (Capacitor) load their pages from these
+        # two built-in addresses - see deploy/MOBILE.md.
+        "https://localhost",
+        "capacitor://localhost",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Lets the apps read the export's file name.
+    expose_headers=["Content-Disposition"],
 )
 
 app.include_router(auth.router)

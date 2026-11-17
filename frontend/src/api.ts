@@ -1,6 +1,9 @@
 // In production, nginx serves the frontend and proxies /api/* to the
 // backend on the same origin, so no base URL (and no CORS) is needed there.
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+// The Android/iOS apps call the live server by its full address (see native.ts).
+import { apiBase, saveBlob } from "./native";
+
+const API_BASE = apiBase();
 
 export function getToken() {
   return localStorage.getItem("token");
@@ -229,16 +232,9 @@ export async function downloadExport(
     throw new Error(err.detail);
   }
   const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
   const disposition = res.headers.get("Content-Disposition") || "";
   const match = disposition.match(/filename="?([^"]+)"?/);
-  a.download = match ? match[1] : `invoices_${language}_${startDate}_to_${endDate}.${format}`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
+  await saveBlob(blob, match ? match[1] : `invoices_${language}_${startDate}_to_${endDate}.${format}`);
 }
 
 export async function downloadCsv(
@@ -505,14 +501,7 @@ export async function downloadVisitorCsv(language: string) {
     throw new Error(err.detail);
   }
   const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "ocrdocflow_free_trial.csv";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
+  await saveBlob(blob, "ocrdocflow_free_trial.csv");
 }
 
 // --- Billing / Stripe -------------------------------------------------

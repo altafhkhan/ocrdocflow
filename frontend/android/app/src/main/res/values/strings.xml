@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">OCRDocFlow</string>
+    <string name="title_activity_main">OCRDocFlow</string>
+    <string name="package_name">com.qumaxa.ocrdocflow</string>
+    <string name="custom_url_scheme">com.qumaxa.ocrdocflow</string>
+</resources>

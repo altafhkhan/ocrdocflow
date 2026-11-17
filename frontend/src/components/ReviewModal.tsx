@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { isNativeApp } from "../native";
+import PdfPages from "./PdfPages";
 import {
   getExtraction,
   confirmExtraction,
@@ -517,7 +519,10 @@ export default function ReviewModal({ documentId, language, onClose, onSaved }: 
         {previewError && <p className="text-sm text-gray-500 p-4">{t.previewUnavailable}</p>}
         {!previewError && !previewUrl && <p className="text-sm text-gray-500 p-4">{t.loading}</p>}
         {previewUrl && previewType === "application/pdf" && (
-          <iframe title={t.original} src={previewUrl} className="w-full h-full" />
+          // A phone WebView cannot show a PDF in a frame, so the app draws the pages itself.
+          isNativeApp
+            ? <PdfPages url={previewUrl} unavailableText={t.previewUnavailable} />
+            : <iframe title={t.original} src={previewUrl} className="w-full h-full" />
         )}
         {previewUrl && previewType !== "application/pdf" && (
           <img src={previewUrl} alt={t.original} className="max-w-full h-auto" />
