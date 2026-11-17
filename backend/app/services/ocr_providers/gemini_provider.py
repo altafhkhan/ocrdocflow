@@ -226,6 +226,35 @@ class GeminiProvider(OCRProvider):
                                             else DEFAULT_FALLBACK_MODELS) if m and m != self.model]
         self.timeout = timeout
 
+    # --- models that recently refused as busy ---------------------------------
+    # When Google answers 429 (quota) / 503 (high demand), or a model does not
+    # answer at all, asking it again for every upload wastes a minute or more
+    # each time. Such a model is skipped for BUSY_COOLDOWN_SECONDS and the
+    # next one in line is asked first; it gets its place back afterwards, or
+    # straight away if every model is cooling down. Shared by all uploads.
+    BUSY_COOLDOWN_SECONDS = 300
+    _busy_until: dict[str, float] = {}
+    _busy_lock = threading.Lock()
+
+    def _mark_busy(self, model: str) -> None:
+        with self._busy_lock:
+            self._busy_until[model] = time.monotonic() + self.BUSY_COOLDOWN_SECONDS
+
+    def _mark_ok(self, model: str) -> None:
+        with self._busy_lock:
+            self._busy_until.pop(model, None)
+
+    def _model_order(self) -> list[str]:
+        """Configured order, with models still cooling down moved to the end
+        (soonest-available first) so they are only a last resort."""
+        models = [self.model] + self.fallback_models
+        now = time.monotonic()
+        with self._busy_lock:
+            until = {m: self._busy_until.get(m, 0.0) for m in models}
+        ready = [m for m in models if until[m] <= now]
+        cooling = sorted((m for m in models if until[m] > now), key=lambda m: until[m])
+        return ready + cooling
+
     # --- token usage of the last call, per thread --------------------------------
     # The provider object is shared by every upload thread, so the usage of
     # "my" request is kept in thread-local storage.
@@ -252,7 +281,8 @@ class GeminiProvider(OCRProvider):
         """Returns the concatenated text of the first candidate."""
         body = {"contents": [{"parts": parts}], "generationConfig": generation_config}
         last_error = "no models tried"
-        for model in [self.model] + self.fallback_models:
+        for model in self._model_order():
+            busy = False
             url = f"{_API_ROOT}/models/{model}:generateContent"
             delay = 4
             for attempt in range(3):
@@ -261,10 +291,12 @@ class GeminiProvider(OCRProvider):
                                          timeout=self.timeout)
                 except requests.RequestException as e:
                     last_error = f"{model}: request failed: {e}"
+                    busy = True  # no answer at all: do not keep other uploads waiting on it
                     time.sleep(delay)
                     delay *= 2
                     continue
                 if resp.status_code == 200:
+                    self._mark_ok(model)
                     data = resp.json()
                     self._add_usage(model, data)
                     try:
@@ -277,6 +309,7 @@ class GeminiProvider(OCRProvider):
                     return text
                 last_error = f"{model}: HTTP {resp.status_code}: {resp.text[:200]}"
                 if resp.status_code in (429, 503):
+                    busy = True
                     # Quota / overload: one quick retry, then move to the next model.
                     if attempt == 0:
                         time.sleep(delay)
@@ -287,7 +320,10 @@ class GeminiProvider(OCRProvider):
                     delay *= 2
                     continue
                 break  # 400/401/403/404: retrying the same model will not help
-            logger.warning("Gemini model %s unavailable (%s)", model, last_error[:160])
+            if busy:
+                self._mark_busy(model)
+            logger.warning("Gemini model %s unavailable%s (%s)", model,
+                           f", skipping it for {self.BUSY_COOLDOWN_SECONDS}s" if busy else "", last_error[:160])
         raise OCRProviderError(f"Gemini: all models failed; last error {last_error}")
 
     # --- public API -----------------------------------------------------------
