@@ -38,6 +38,9 @@ export default function Dashboard() {
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [language, setLanguage] = useState("auto");
   const [message, setMessage] = useState("");
+  // Notes from the server about the last upload (e.g. a long invoice
+  // that used more than one invoice of the plan).
+  const [notices, setNotices] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [stageIndex, setStageIndex] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(true);
@@ -109,10 +112,12 @@ export default function Dashboard() {
   async function doUpload(file: File) {
     setUploading(true);
     setMessage("");
+    setNotices([]);
     startStageAnimation();
     try {
       const result = await uploadDocument(file, language);
       setMessage("Done! Check Upload History below for the result.");
+      setNotices(result.notices ?? []);
       refreshList();
       try {
         const detail = await getDocument(result.id);
@@ -256,6 +261,10 @@ export default function Dashboard() {
             onFile={handleFile}
             onReject={setMessage}
           />
+          <p className="text-xs text-gray-500 mt-2">
+            Each invoice in a file counts once towards your plan. An invoice with more than 25 line
+            items counts as 1 invoice for every 25 line items (for example, 100 line items = 4 invoices).
+          </p>
 
           {uploading && (
             <div className="mt-4">
@@ -288,7 +297,15 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* CSV EXPORT */}
+        {notices.length > 0 && (
+          <div role="status" className="mb-4 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {notices.map((n, i) => (
+              <p key={i}>{n}</p>
+            ))}
+          </div>
+        )}
+
+        {/* CSV / EXCEL EXPORT */}
         <ExportPanel />
 
         {/* UPLOAD HISTORY */}

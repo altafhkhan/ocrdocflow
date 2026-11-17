@@ -35,6 +35,18 @@ _ocr_slots = threading.BoundedSemaphore(max(1, settings.OCR_MAX_CONCURRENT))
 # The local PaddleOCR engine is CPU/memory heavy and not safe to call from
 # two threads at once - one document at a time through it.
 _paddle_lock = threading.Lock()
+# AI tokens billed for the document this thread processed last (uploads run
+# start to finish in one worker thread) - read with pop_last_usage().
+_usage_local = threading.local()
+
+
+def pop_last_usage() -> dict | None:
+    """{"model", "input_tokens", "output_tokens"} for the document this
+    thread just ran through extract_document, or None when no paid AI call
+    was made (local engine, or the cloud engine failed)."""
+    usage = getattr(_usage_local, "usage", None)
+    _usage_local.usage = None
+    return usage
 
 
 def get_pdf_page_count(file_path: str) -> int:
@@ -112,6 +124,7 @@ def extract_document(file_path: str, real_type: str, language: str
     Raises an exception if OCR fails - the caller is responsible for
     catching it and marking the document as "failed".
     """
+    _usage_local.usage = None
     with _ocr_slots:
         images = load_page_images(file_path, real_type)
         name = (settings.OCR_PROVIDER or "paddle").lower()
@@ -133,6 +146,14 @@ def extract_document(file_path: str, real_type: str, language: str
             pages = _paddle_pages(images, language)
             invoices = None
             detected = None
+        # Whatever the cloud engine billed for this document (also when its
+        # answer was unusable and the local engine took over).
+        if name != "paddle":
+            try:
+                pop = getattr(get_provider(name), "pop_usage", None)
+                _usage_local.usage = pop() if pop else None
+            except OCRProviderError:
+                _usage_local.usage = None
         return join_pages(pages), len(images), invoices, detected
 
 

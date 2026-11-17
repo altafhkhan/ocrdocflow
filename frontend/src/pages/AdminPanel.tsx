@@ -7,11 +7,12 @@ import {
   getAuditLog, AuditLogRow,
 } from "../api";
 import SortableFilterTable, { ColumnDef } from "../components/SortableFilterTable";
+import AdminUsageTab from "../components/AdminUsageTab";
 
 const ROLES = ["user", "admin"];
 const PLANS = ["free", "starter", "professional", "business"];
 
-type Tab = "users" | "documents" | "audit";
+type Tab = "users" | "usage" | "documents" | "audit";
 
 export default function AdminPanel() {
   const [checking, setChecking] = useState(true);
@@ -175,6 +176,30 @@ export default function AdminPanel() {
     { key: "language", label: "Language", filterType: "select" },
     { key: "page_count", label: "Pages" },
     {
+      key: "billable_invoice_count",
+      label: "Invoices (charged)",
+      getValue: (d) => d.billable_invoice_count ?? d.detected_invoice_count ?? 0,
+      render: (d) => {
+        const found = d.detected_invoice_count ?? 0;
+        const charged = d.billable_invoice_count ?? found;
+        return charged > found ? <span title="Long invoices count as 1 per 25 line items">{found} ({charged})</span> : <span>{found}</span>;
+      },
+    },
+    {
+      key: "ai_tokens",
+      label: "Tokens in / out",
+      getValue: (d) => (d.ai_input_tokens ?? 0) + (d.ai_output_tokens ?? 0),
+      render: (d) => d.ai_input_tokens == null
+        ? <span className="text-gray-400">-</span>
+        : <span title={d.ai_model ?? ""}>{d.ai_input_tokens.toLocaleString()} / {(d.ai_output_tokens ?? 0).toLocaleString()}</span>,
+    },
+    {
+      key: "ai_cost_usd",
+      label: "AI cost",
+      getValue: (d) => d.ai_cost_usd ?? 0,
+      render: (d) => d.ai_cost_usd == null ? <span className="text-gray-400">-</span> : <span>${d.ai_cost_usd.toFixed(4)}</span>,
+    },
+    {
       key: "uploaded_at",
       label: "Uploaded",
       getValue: (d) => new Date(d.uploaded_at).getTime(),
@@ -222,7 +247,7 @@ export default function AdminPanel() {
         {message && <p className="text-sm text-blue-700 mb-3">{message}</p>}
 
         <div className="flex gap-2 mb-4">
-          {(["users", "documents", "audit"] as Tab[]).map((t) => (
+          {(["users", "usage", "documents", "audit"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -231,6 +256,7 @@ export default function AdminPanel() {
               }`}
             >
               {t === "users" && `Users (${users.length})`}
+              {t === "usage" && "Usage & costs"}
               {t === "documents" && `Documents (${docs.length})`}
               {t === "audit" && `Audit Log (${auditLog.length})`}
             </button>
@@ -241,6 +267,7 @@ export default function AdminPanel() {
           {tab === "users" && (
             <SortableFilterTable columns={userColumns} rows={users} rowKey={(u) => u.id} />
           )}
+          {tab === "usage" && <AdminUsageTab />}
           {tab === "documents" && (
             <SortableFilterTable columns={documentColumns} rows={docs} rowKey={(d) => d.id} />
           )}

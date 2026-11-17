@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Numeric
 from sqlalchemy.sql import func
 from app.db.database import Base
 
@@ -38,5 +38,16 @@ class Document(Base):
     # extraction runs, from len(parse_invoices_from_text(...)). Used by
     # services/usage_service.py for plan quota enforcement.
     detected_invoice_count = Column(Integer, nullable=True)
+    # Plan invoices this document USES: a long invoice counts as several
+    # (one per 25 line items - services/ai_cost.py). NULL on documents
+    # uploaded before this existed; detected_invoice_count applies then.
+    billable_invoice_count = Column(Integer, nullable=True)
+    # What reading this document cost us: the AI model that answered, the
+    # tokens it billed and the cost at the price list in settings. All
+    # NULL when the local engine did the work (no AI cost).
+    ai_model = Column(String, nullable=True)
+    ai_input_tokens = Column(Integer, nullable=True)
+    ai_output_tokens = Column(Integer, nullable=True)
+    ai_cost_usd = Column(Numeric(12, 6), nullable=True)
     error_message = Column(String, nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -38,7 +38,7 @@ from app.db.database import get_db
 from app.models.document import Document
 from app.models.visitor import VisitorUsage
 from app.models.extracted_invoice import ExtractedInvoiceHeader, ExtractedInvoiceItem
-from app.services import ocr_service, field_extractor
+from app.services import ai_cost, ocr_service, field_extractor, usage_service
 from app.services.csv_headers import CSV_HEADERS
 from app.api.v1.documents import detect_real_file_type
 
@@ -117,6 +117,9 @@ def visitor_upload(
     # thread, so the seconds spent waiting on OCR do not freeze the server
     # for everyone else. ocr_service caps how many run at once.
     _cleanup_abandoned_visitor_data(db)
+    # Visitors have no plan, but they do spend the platform's AI budget.
+    usage_service.check_spend_caps_before_upload(db, None)
+    platform_cost_before = usage_service.get_platform_cost_this_month(db)
 
     ip = _get_client_ip(request)
 
@@ -235,11 +238,19 @@ def visitor_upload(
         document.status = "failed"
         document.error_message = str(exc)[:500]
 
+    ai_usage = ocr_service.pop_last_usage()
+    if ai_usage:
+        document.ai_model = ai_usage["model"]
+        document.ai_input_tokens = ai_usage["input_tokens"]
+        document.ai_output_tokens = ai_usage["output_tokens"]
+        document.ai_cost_usd = ai_cost.cost_usd(ai_usage["model"], ai_usage["input_tokens"], ai_usage["output_tokens"])
+
     usage.total_uploads += 1
     usage.last_upload_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(document)
+    usage_service.send_spend_alerts(db, None, 0.0, platform_cost_before)
 
     return {
         "id": document.id,

@@ -22,8 +22,9 @@ from app.models.admin_audit_log import AdminAuditLog
 from app.models.document import Document
 from app.models.extracted_invoice import ExtractedInvoiceHeader, ExtractedInvoiceItem
 from app.models.invoice import Invoice, InvoiceItem
+from app.models.organization import Organization
 from app.models.user import User
-from app.services import usage_service
+from app.services import email_service, usage_service
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -183,6 +184,11 @@ def list_all_documents(
             "detected_language": doc.detected_language,
             "page_count": doc.page_count,
             "detected_invoice_count": doc.detected_invoice_count,
+            "billable_invoice_count": doc.billable_invoice_count,
+            "ai_model": doc.ai_model,
+            "ai_input_tokens": doc.ai_input_tokens,
+            "ai_output_tokens": doc.ai_output_tokens,
+            "ai_cost_usd": float(doc.ai_cost_usd) if doc.ai_cost_usd is not None else None,
             "uploaded_at": doc.uploaded_at,
         }
         for doc, email in rows
@@ -255,3 +261,140 @@ def get_audit_log(
         }
         for log, email in rows
     ]
+
+
+# --- AI usage and cost monitoring -------------------------------------------
+
+def _usage_totals(db: Session, since: datetime, user_ids: list[int] | None = None, visitors_only: bool = False) -> dict:
+    """Uploads, pages, invoices, tokens and AI cost since `since`."""
+    query = db.query(
+        func.count(Document.id),
+        func.coalesce(func.sum(Document.page_count), 0),
+        func.coalesce(func.sum(Document.detected_invoice_count), 0),
+        func.coalesce(func.sum(func.coalesce(Document.billable_invoice_count, Document.detected_invoice_count)), 0),
+        func.coalesce(func.sum(Document.ai_input_tokens), 0),
+        func.coalesce(func.sum(Document.ai_output_tokens), 0),
+        func.coalesce(func.sum(Document.ai_cost_usd), 0),
+    ).filter(Document.uploaded_at >= since)
+    if visitors_only:
+        query = query.filter(Document.user_id.is_(None))
+    elif user_ids is not None:
+        if not user_ids:
+            return {"documents": 0, "pages": 0, "invoices": 0, "billable_invoices": 0,
+                    "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+        query = query.filter(Document.user_id.in_(user_ids))
+    docs, pages, invoices, billable, tokens_in, tokens_out, cost = query.one()
+    return {
+        "documents": int(docs or 0), "pages": int(pages or 0), "invoices": int(invoices or 0),
+        "billable_invoices": int(billable or 0),
+        "input_tokens": int(tokens_in or 0), "output_tokens": int(tokens_out or 0),
+        "cost_usd": round(float(cost or 0), 4),
+    }
+
+
+@router.get("/usage")
+def get_usage_report(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_current_admin),
+):
+    """
+    Month-to-date AI usage and cost per customer (organization) and for the
+    whole platform, with each customer's limits. Costs are our estimate:
+    tokens reported by the AI provider x the price list in settings.
+    """
+    since = usage_service.month_start()
+    organizations = []
+    for org in db.query(Organization).order_by(Organization.name).all():
+        members = db.query(User).filter(User.organization_id == org.id).order_by(User.id).all()
+        totals = _usage_totals(db, since, [m.id for m in members])
+        cap = usage_service.get_org_cost_cap(org)
+        organizations.append({
+            "id": org.id,
+            "name": org.name,
+            "plan": org.plan,
+            "members": len(members),
+            "owner_email": next((m.email for m in members if m.org_role == "owner"), members[0].email if members else None),
+            **totals,
+            "cost_cap_usd": cap,
+            "cost_cap_is_custom": org.monthly_cost_cap_usd is not None,
+            "cost_cap_used_percent": round(100 * totals["cost_usd"] / cap, 1) if cap > 0 else None,
+            "invoices_this_billing_period": usage_service.get_usage_this_period(db, org),
+            "invoice_limit": usage_service.get_plan_limit(org),
+            "invoice_limit_is_custom": org.invoice_limit_override is not None,
+        })
+
+    platform = _usage_totals(db, since)
+    platform_cap = settings.PLATFORM_MONTHLY_COST_CAP_USD or 0
+    return {
+        "month_start": since,
+        "organizations": organizations,
+        "visitors": _usage_totals(db, since, visitors_only=True),
+        "platform": {
+            **platform,
+            "cost_cap_usd": platform_cap,
+            "cost_cap_used_percent": round(100 * platform["cost_usd"] / platform_cap, 1) if platform_cap > 0 else None,
+        },
+        "settings": {
+            "line_items_per_invoice": settings.LINE_ITEMS_PER_INVOICE_UNIT,
+            "alert_email": settings.ALERT_EMAIL or None,
+            "alert_email_can_send": bool(settings.ALERT_EMAIL) and email_service.email_configured(),
+            "alert_thresholds": settings.COST_ALERT_THRESHOLDS,
+            "ai_prices_usd_per_million_tokens": settings.AI_PRICES_USD_PER_MTOK,
+            "ai_model": settings.GEMINI_MODEL if settings.OCR_PROVIDER == "gemini" else settings.OCR_PROVIDER,
+        },
+    }
+
+
+class UpdateOrganizationLimits(BaseModel):
+    # Send null to go back to the plan's default. A field that is left out
+    # is not changed.
+    monthly_cost_cap_usd: float | None = None
+    invoice_limit_override: int | None = None
+
+
+@router.patch("/organizations/{org_id}")
+def update_organization_limits(
+    org_id: int,
+    payload: UpdateOrganizationLimits,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    changes = []
+    sent = payload.model_fields_set
+
+    if "monthly_cost_cap_usd" in sent:
+        new_cap = payload.monthly_cost_cap_usd
+        if new_cap is not None and (new_cap < 0 or new_cap > 100000):
+            raise HTTPException(status_code=400, detail="Spending cap must be between 0 and 100000 USD (0 = no cap).")
+        old_cap = float(org.monthly_cost_cap_usd) if org.monthly_cost_cap_usd is not None else None
+        if old_cap != new_cap:
+            changes.append(f"monthly AI spending cap: {old_cap if old_cap is not None else 'plan default'} -> "
+                           f"{new_cap if new_cap is not None else 'plan default'}")
+            org.monthly_cost_cap_usd = new_cap
+
+    if "invoice_limit_override" in sent:
+        new_limit = payload.invoice_limit_override
+        if new_limit is not None and (new_limit < 0 or new_limit > 10000000):
+            raise HTTPException(status_code=400, detail="Invoice limit must be between 0 and 10000000.")
+        if org.invoice_limit_override != new_limit:
+            changes.append(f"invoice limit: {org.invoice_limit_override if org.invoice_limit_override is not None else 'plan default'} -> "
+                           f"{new_limit if new_limit is not None else 'plan default'}")
+            org.invoice_limit_override = new_limit
+
+    if changes:
+        _log_action(db, admin, "organization_limits_updated", "organization", org.id,
+                    "; ".join(changes) + f" (organization: {org.name})")
+    db.commit()
+    db.refresh(org)
+    return {
+        "id": org.id,
+        "cost_cap_usd": usage_service.get_org_cost_cap(org),
+        "cost_cap_is_custom": org.monthly_cost_cap_usd is not None,
+        "invoice_limit": usage_service.get_plan_limit(org),
+        "invoice_limit_is_custom": org.invoice_limit_override is not None,
+    }
+

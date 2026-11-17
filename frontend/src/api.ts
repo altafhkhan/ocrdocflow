@@ -69,6 +69,7 @@ export interface CurrentUser {
   invoices_this_period: number | null;
   billing_period_limit: number | null;
   billing_period_start: string | null;
+  export_format?: string;
 }
 
 export async function getMe(): Promise<CurrentUser> {
@@ -79,7 +80,19 @@ export async function getMe(): Promise<CurrentUser> {
   return res.json();
 }
 
-export async function uploadDocument(file: File, language: string) {
+export interface UploadResult {
+  id: number;
+  original_filename: string;
+  status: string;
+  uploaded_at: string;
+  invoice_count: number | null;
+  billable_invoice_count: number | null;
+  // Plain-English notes from the server, e.g. a long invoice that used
+  // more than one invoice of the plan.
+  notices?: string[];
+}
+
+export async function uploadDocument(file: File, language: string): Promise<UploadResult> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("language", language);
@@ -193,7 +206,10 @@ export async function confirmExtraction(documentId: number, data: ExtractionData
 
 // --- CSV export ------------------------------------------------------------
 
-export async function downloadCsv(
+export type ExportFormat = "csv" | "xlsx";
+
+export async function downloadExport(
+  format: ExportFormat,
   startDate: string,
   endDate: string,
   language: string,
@@ -205,11 +221,11 @@ export async function downloadCsv(
     language,
     document_language: documentLanguage,
   });
-  const res = await fetch(`${API_BASE}/api/v1/exports/csv?${params.toString()}`, {
+  const res = await fetch(`${API_BASE}/api/v1/exports/${format}?${params.toString()}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Could not generate CSV export." }));
+    const err = await res.json().catch(() => ({ detail: "Could not generate the export file." }));
     throw new Error(err.detail);
   }
   const blob = await res.blob();
@@ -218,11 +234,34 @@ export async function downloadCsv(
   a.href = url;
   const disposition = res.headers.get("Content-Disposition") || "";
   const match = disposition.match(/filename="?([^"]+)"?/);
-  a.download = match ? match[1] : `invoices_${language}_${startDate}_to_${endDate}.csv`;
+  a.download = match ? match[1] : `invoices_${language}_${startDate}_to_${endDate}.${format}`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   window.URL.revokeObjectURL(url);
+}
+
+export async function downloadCsv(
+  startDate: string,
+  endDate: string,
+  language: string,
+  documentLanguage: string = "all",
+) {
+  return downloadExport("csv", startDate, endDate, language, documentLanguage);
+}
+
+// Remembers the preferred download format on the user's account.
+export async function saveExportFormat(format: ExportFormat) {
+  const res = await fetch(`${API_BASE}/api/v1/auth/me/preferences`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ export_format: format }),
+  });
+  if (!res.ok) throw new Error("Could not save the download format.");
+  return res.json();
 }
 
 // --- Admin -------------------------------------------------------------
@@ -274,6 +313,12 @@ export interface AdminDocumentRow {
   language: string;
   detected_language: string | null;
   page_count: number | null;
+  detected_invoice_count?: number | null;
+  billable_invoice_count?: number | null;
+  ai_model?: string | null;
+  ai_input_tokens?: number | null;
+  ai_output_tokens?: number | null;
+  ai_cost_usd?: number | null;
   uploaded_at: string;
 }
 
@@ -292,6 +337,74 @@ export async function deleteDocumentAdmin(documentId: number) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Could not delete document." }));
+    throw new Error(err.detail);
+  }
+  return res.json();
+}
+
+// AI usage and cost per customer (Admin Panel, Usage tab).
+export interface UsageTotals {
+  documents: number;
+  pages: number;
+  invoices: number;
+  billable_invoices: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+export interface UsageOrgRow extends UsageTotals {
+  id: number;
+  name: string;
+  plan: string;
+  members: number;
+  owner_email: string | null;
+  cost_cap_usd: number;
+  cost_cap_is_custom: boolean;
+  cost_cap_used_percent: number | null;
+  invoices_this_billing_period: number;
+  invoice_limit: number;
+  invoice_limit_is_custom: boolean;
+}
+
+export interface UsageReport {
+  month_start: string;
+  organizations: UsageOrgRow[];
+  visitors: UsageTotals;
+  platform: UsageTotals & { cost_cap_usd: number; cost_cap_used_percent: number | null };
+  settings: {
+    line_items_per_invoice: number;
+    alert_email: string | null;
+    alert_email_can_send: boolean;
+    alert_thresholds: string;
+    ai_prices_usd_per_million_tokens: string;
+    ai_model: string;
+  };
+}
+
+export async function getUsageReport(): Promise<UsageReport> {
+  const res = await fetch(`${API_BASE}/api/v1/admin/usage`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) throw new Error("Could not load the usage report.");
+  return res.json();
+}
+
+// null = go back to the plan's default.
+export async function updateOrganizationLimits(
+  orgId: number,
+  limits: { monthly_cost_cap_usd: number | null; invoice_limit_override: number | null },
+) {
+  const res = await fetch(`${API_BASE}/api/v1/admin/organizations/${orgId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify(limits),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Could not save the limits." }));
     throw new Error(err.detail);
   }
   return res.json();

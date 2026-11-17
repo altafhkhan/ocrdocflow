@@ -15,6 +15,16 @@ rate limiting, Stripe subscriptions (starter/professional/business).
   `OCR_MAX_CONCURRENT` (default 6) documents at once, the rest wait their
   turn. No batch upload — not built for heavy concurrent volume.
 - Extraction is **rule-based**; no LLM document understanding yet.
+- **AI cost monitoring**: every upload stores the AI model, tokens and
+  estimated cost; Admin Panel > "Usage & costs" shows them per customer
+  and lets an admin set a customer's monthly spending cap and invoice
+  limit. Caps block uploads when reached; alerts at 80%/100% go to
+  `ALERT_EMAIL`. The platform-wide cap is a server setting
+  (`PLATFORM_MONTHLY_COST_CAP_USD`), not editable in the app.
+- **Long invoices** count as 1 plan invoice per 25 line items
+  (`LINE_ITEMS_PER_INVOICE_UNIT`); the dashboard and Billing page say so.
+- **Export** is CSV or Excel (.xlsx); the choice is saved on the user's
+  account. No batch upload.
 - Password reset: emailed single-use link, sent over SMTP (own mailbox)
   or Resend, whichever is configured. With neither set on the server the
   link only goes to the API log (see `deploy/DEPLOY.md`, "Password reset

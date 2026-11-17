@@ -23,6 +23,9 @@ numpy==1.26.4
 # --- Cloud OCR providers (Gemini / Azure) call plain REST ---
 requests==2.32.3
 
+# --- Excel (.xlsx) export ---
+openpyxl==3.1.5
+
 alembic
 
 stripe

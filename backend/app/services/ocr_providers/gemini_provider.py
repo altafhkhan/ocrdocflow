@@ -28,6 +28,7 @@ import base64
 import io
 import json
 import logging
+import threading
 import time
 
 import requests
@@ -225,6 +226,27 @@ class GeminiProvider(OCRProvider):
                                             else DEFAULT_FALLBACK_MODELS) if m and m != self.model]
         self.timeout = timeout
 
+    # --- token usage of the last call, per thread --------------------------------
+    # The provider object is shared by every upload thread, so the usage of
+    # "my" request is kept in thread-local storage.
+    _usage_local = threading.local()
+
+    def _add_usage(self, model: str, data: dict) -> None:
+        meta = data.get("usageMetadata") or {}
+        usage = getattr(self._usage_local, "usage", None) or {"model": None, "input_tokens": 0, "output_tokens": 0}
+        usage["model"] = data.get("modelVersion") or model
+        usage["input_tokens"] += int(meta.get("promptTokenCount") or 0)
+        # Thinking tokens are billed at the output price.
+        usage["output_tokens"] += int(meta.get("candidatesTokenCount") or 0) + int(meta.get("thoughtsTokenCount") or 0)
+        self._usage_local.usage = usage
+
+    def pop_usage(self) -> dict | None:
+        """Tokens billed by this thread's calls since the last pop:
+        {"model", "input_tokens", "output_tokens"}, or None if none."""
+        usage = getattr(self._usage_local, "usage", None)
+        self._usage_local.usage = None
+        return usage
+
     # --- low-level call with retries + model fallback ------------------------
     def _generate(self, parts: list[dict], generation_config: dict) -> str:
         """Returns the concatenated text of the first candidate."""
@@ -244,6 +266,7 @@ class GeminiProvider(OCRProvider):
                     continue
                 if resp.status_code == 200:
                     data = resp.json()
+                    self._add_usage(model, data)
                     try:
                         cand = data["candidates"][0]
                         text = "".join(p.get("text", "") for p in cand["content"]["parts"])

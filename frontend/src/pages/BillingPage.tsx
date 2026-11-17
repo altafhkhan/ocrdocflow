@@ -136,7 +136,12 @@ export default function BillingPage() {
           ))}
         </div>
 
-        <p className="text-xs text-gray-400 mt-6 text-center">
+        <p className="text-xs text-gray-500 mt-6 text-center">
+          Each invoice in an uploaded file counts once. An invoice with more than 25 line items counts as
+          1 invoice for every 25 line items (for example, an invoice with 100 line items counts as 4).
+        </p>
+
+        <p className="text-xs text-gray-400 mt-2 text-center">
           Payments are processed securely by Stripe. We never see or store your card details.
         </p>
       </div>

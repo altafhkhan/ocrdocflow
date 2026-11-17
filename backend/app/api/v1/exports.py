@@ -1,18 +1,19 @@
 """
-Phase 4/5 - CSV Export.
+Phase 4/5 - Export (CSV or Excel).
 
 Lets a user download their SAVED (permanent, confirmed) invoices for a
-date range as a CSV file - not the staging/pending-review data, since
-only reviewed and confirmed records should leave the system as "real"
-business data (Security Policy Section 11).
+date range - not the staging/pending-review data, since only reviewed and
+confirmed records should leave the system as "real" business data
+(Security Policy Section 11).
 
 Format: one row per LINE ITEM, with the invoice's header fields repeated
 on every row for that invoice. This "flattened" layout is the standard
-shape expected by most accounting/ERP CSV import tools (QuickBooks,
-Xero, etc), rather than a nested header+items structure.
+shape expected by most accounting/ERP import tools (QuickBooks, Xero,
+etc), rather than a nested header+items structure. The CSV and the Excel
+file hold exactly the same rows and columns.
 
-Language: the column HEADERS (not the data itself) are shown in English
-or Arabic depending on the `language` query parameter, so the file reads
+Language: the column HEADERS (not the data itself) are shown in the
+language given by the `language` query parameter, so the file reads
 naturally for the person using it. This only affects labels/headers -
 we never translate the actual invoice data (matches the product's
 "never translate document content" decision).
@@ -20,6 +21,7 @@ we never translate the actual invoice data (matches the product's
 import csv
 import io
 from datetime import date, timedelta
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -37,17 +39,19 @@ from app.models.user import User
 router = APIRouter(prefix="/api/v1/exports", tags=["exports"])
 
 _HEADERS = CSV_HEADERS
+_RTL_LANGUAGES = {"ar", "ur"}
+_XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
-@router.get("/csv")
-def export_csv(
-    start_date: date = Query(..., description="Include invoices uploaded on/after this date"),
-    end_date: date = Query(..., description="Include invoices uploaded on/before this date"),
-    language: str = Query("en", description="Column header language (en, ar, ur, fr, de, es, nl, zh, ja, ko)"),
-    document_language: str = Query("all", description="Only invoices from documents in this language, or 'all'"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def _export_rows(
+    db: Session,
+    current_user: User,
+    start_date: date,
+    end_date: date,
+    language: str,
+    document_language: str,
+) -> list[list]:
+    """Validates the request and returns the data rows (no header row)."""
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="End date must be on or after start date.")
     if language not in _HEADERS:
@@ -80,10 +84,7 @@ def export_csv(
         ))
     invoices = query.order_by(Invoice.confirmed_at).all()
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(_HEADERS[language])
-
+    rows: list[list] = []
     for inv in invoices:
         items = (
             db.query(InvoiceItem)
@@ -99,22 +100,93 @@ def export_csv(
 
         if items:
             for item in items:
-                writer.writerow(header_cells + [
+                rows.append(header_cells + [
                     item.description, item.qty, item.unit_price, item.total_price,
                 ] + totals_cells)
         else:
             # An invoice with no line items still gets one row, so it's
             # not silently dropped from the export.
-            writer.writerow(header_cells + [None, None, None, None] + totals_cells)
+            rows.append(header_cells + [None, None, None, None] + totals_cells)
+    return rows
 
+
+def _csv_bytes(headers: list[str], rows: list[list]) -> bytes:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    writer.writerows(rows)
     # utf-8-sig (adds a BOM) so Excel correctly detects UTF-8 and
     # displays Arabic text properly instead of showing garbled characters
     # - a common, easy-to-miss gotcha with plain UTF-8 CSVs.
-    csv_bytes = output.getvalue().encode("utf-8-sig")
+    return output.getvalue().encode("utf-8-sig")
 
-    filename = f"invoices_{document_language}_{start_date}_to_{end_date}.csv"
+
+def _xlsx_bytes(headers: list[str], rows: list[list], rtl: bool) -> bytes:
+    """A real .xlsx workbook: bold frozen header row, numbers stored as
+    numbers (so they can be summed), sensible column widths, and a
+    right-to-left sheet for Arabic/Urdu headings."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Invoices"
+    ws.sheet_view.rightToLeft = rtl
+
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="2563EB")
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{max(1, len(rows) + 1)}"
+
+    for row in rows:
+        ws.append([float(v) if isinstance(v, Decimal) else v for v in row])
+
+    for index, header in enumerate(headers, start=1):
+        longest = max([len(str(header))] + [len(str(r[index - 1])) for r in rows if r[index - 1] is not None])
+        ws.column_dimensions[get_column_letter(index)].width = min(60, max(10, longest + 2))
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+def _download(content: bytes, media_type: str, filename: str) -> StreamingResponse:
     return StreamingResponse(
-        io.BytesIO(csv_bytes),
-        media_type="text/csv",
+        io.BytesIO(content),
+        media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/csv")
+def export_csv(
+    start_date: date = Query(..., description="Include invoices uploaded on/after this date"),
+    end_date: date = Query(..., description="Include invoices uploaded on/before this date"),
+    language: str = Query("en", description="Column header language (en, ar, ur, fr, de, es, nl, zh, ja, ko)"),
+    document_language: str = Query("all", description="Only invoices from documents in this language, or 'all'"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = _export_rows(db, current_user, start_date, end_date, language, document_language)
+    filename = f"invoices_{document_language}_{start_date}_to_{end_date}.csv"
+    return _download(_csv_bytes(_HEADERS[language], rows), "text/csv", filename)
+
+
+@router.get("/xlsx")
+def export_xlsx(
+    start_date: date = Query(..., description="Include invoices uploaded on/after this date"),
+    end_date: date = Query(..., description="Include invoices uploaded on/before this date"),
+    language: str = Query("en", description="Column header language (en, ar, ur, fr, de, es, nl, zh, ja, ko)"),
+    document_language: str = Query("all", description="Only invoices from documents in this language, or 'all'"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Same rows and columns as /csv, as an Excel workbook."""
+    rows = _export_rows(db, current_user, start_date, end_date, language, document_language)
+    filename = f"invoices_{document_language}_{start_date}_to_{end_date}.xlsx"
+    content = _xlsx_bytes(_HEADERS[language], rows, rtl=language in _RTL_LANGUAGES)
+    return _download(content, _XLSX_MEDIA_TYPE, filename)

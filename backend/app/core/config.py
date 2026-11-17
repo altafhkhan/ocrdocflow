@@ -69,6 +69,30 @@ class Settings(BaseSettings):
     AZURE_DI_ENDPOINT: str = ""
     AZURE_DI_KEY: str = ""
 
+    # --- AI cost monitoring, limits and caps (see services/ai_cost.py,
+    #     services/usage_service.py and the Admin Panel's Usage tab) ---
+    # Published price per 1 million tokens, "model:input:output" in USD.
+    # Update when Google changes its price list; an unknown model is
+    # charged at the dearest price listed here.
+    AI_PRICES_USD_PER_MTOK: str = (
+        "gemini-3.6-flash:0.75:3.75,gemini-3.5-flash:0.75:3.75,"
+        "gemini-3.5-flash-lite:0.30:2.50,gemini-3.1-flash-lite:0.25:1.50"
+    )
+    # A long invoice counts as one plan invoice per this many line items.
+    LINE_ITEMS_PER_INVOICE_UNIT: int = 25
+    # Default monthly AI spending cap per customer, by plan (USD, calendar
+    # month, 0 = no cap). One customer can be given its own cap in the
+    # Admin Panel. Reaching the cap blocks further uploads that month.
+    PLAN_COST_CAPS_USD: str = "free:0.50,starter:6,professional:20,business:50"
+    # Monthly AI spending cap for the WHOLE platform, visitors included
+    # (USD, 0 = no cap). Reaching it pauses all uploads until next month
+    # or until this value is raised.
+    PLATFORM_MONTHLY_COST_CAP_USD: float = 0
+    # Alert emails go here when a customer or the platform passes
+    # COST_ALERT_THRESHOLDS of its cap. Empty = alerts only in the API log.
+    ALERT_EMAIL: str = ""
+    COST_ALERT_THRESHOLDS: str = "0.8,1.0"
+
     # --- Launch promotion (see api/v1/billing.py) ---
     # A Stripe coupon is created once (found again by metadata) and applied
     # automatically at checkout while seats remain. Stripe itself enforces

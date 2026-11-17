@@ -16,6 +16,8 @@ class User(Base):
     # different concept from org_role below (which controls what a
     # person can do WITHIN their own company's account).
     role = Column(String, nullable=False, default="user")
+    # Preferred download format on the dashboard: "csv" or "xlsx".
+    export_format = Column(String, nullable=False, default="csv", server_default="csv")
 
     # --- Organization membership -------------------------------------
     # Nullable FOR NOW during migration - every user will have one once

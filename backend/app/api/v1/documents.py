@@ -12,7 +12,7 @@ from app.db.database import get_db
 from app.models.document import Document
 from app.models.extracted_invoice import ExtractedInvoiceHeader, ExtractedInvoiceItem
 from app.models.user import User
-from app.services import ocr_service, field_extractor, usage_service, language_detector
+from app.services import ai_cost, ocr_service, field_extractor, usage_service, language_detector
 from app.services.csv_headers import SUPPORTED_LANGUAGES
 
 logger = logging.getLogger("ocrdocflow.documents")
@@ -85,6 +85,8 @@ def upload_document(
     # user's ORGANIZATION quota (usage is pooled across all members of
     # the org). Admins are exempt (see usage_service.check_quota_before_upload).
     usage_service.check_quota_before_upload(db, current_user)
+    # Monthly AI spending caps (this customer's and the platform's).
+    usage_service.check_spend_caps_before_upload(db, current_user)
 
     contents = file.file.read()
 
@@ -151,6 +153,9 @@ def upload_document(
     # ORGANIZATION level, since usage is pooled across all members.
     org = current_user.organization
     usage_before = usage_service.get_usage_this_period(db, org) if org else 0
+    org_cost_before = usage_service.get_org_cost_this_month(db, org) if org else 0.0
+    platform_cost_before = usage_service.get_platform_cost_this_month(db)
+    notices: list[str] = []
 
     # End the open read transaction so this request does not sit on a
     # pooled database connection for the whole OCR wait.
@@ -189,6 +194,11 @@ def upload_document(
             # a page can hold multiple invoices, or one invoice can span
             # several pages).
             document.detected_invoice_count = len(invoices_found)
+            # ...except that a long invoice counts as one per 25 line items.
+            document.billable_invoice_count = ai_cost.billable_invoices(invoices_found)
+            notice = ai_cost.big_invoice_notice(invoices_found)
+            if notice:
+                notices.append(notice)
             for invoice_index, parsed in enumerate(invoices_found):
                 db.add(ExtractedInvoiceHeader(
                     document_id=document.id,
@@ -212,17 +222,31 @@ def upload_document(
         document.status = "failed"
         document.error_message = str(exc)[:500]
 
+    # What the AI engine billed for this upload (also for a failed one).
+    ai_usage = ocr_service.pop_last_usage()
+    if ai_usage:
+        document.ai_model = ai_usage["model"]
+        document.ai_input_tokens = ai_usage["input_tokens"]
+        document.ai_output_tokens = ai_usage["output_tokens"]
+        document.ai_cost_usd = ai_cost.cost_usd(ai_usage["model"], ai_usage["input_tokens"], ai_usage["output_tokens"])
+
     db.commit()
     db.refresh(document)
 
     usage_after = usage_service.get_usage_this_period(db, org) if org else 0
     usage_service.log_usage_warnings(db, current_user, usage_before, usage_after)
+    usage_service.send_spend_alerts(db, current_user, org_cost_before, platform_cost_before)
 
     return {
         "id": document.id,
         "original_filename": document.original_filename,
         "status": document.status,
         "uploaded_at": document.uploaded_at,
+        "invoice_count": document.detected_invoice_count,
+        "billable_invoice_count": document.billable_invoice_count,
+        # Plain-English notes for the uploader (e.g. a long invoice that
+        # used more than one invoice of the plan).
+        "notices": notices,
     }
 
 

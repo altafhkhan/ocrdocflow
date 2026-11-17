@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import logging
 
@@ -170,6 +171,7 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
             "invoices_this_period": None,
             "billing_period_limit": None,
             "billing_period_start": None,
+            "export_format": current_user.export_format or "csv",
         }
 
     return {
@@ -181,4 +183,23 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
         "invoices_this_period": usage_service.get_usage_this_period(db, org),
         "billing_period_limit": usage_service.get_plan_limit(org),
         "billing_period_start": usage_service.get_period_start(org),
+        "export_format": current_user.export_format or "csv",
     }
+
+
+class PreferencesIn(BaseModel):
+    export_format: str
+
+
+@router.patch("/me/preferences")
+def update_my_preferences(
+    payload: PreferencesIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remembers the user's choices between logins (download format)."""
+    if payload.export_format not in ("csv", "xlsx"):
+        raise HTTPException(status_code=400, detail="Download format must be csv or xlsx.")
+    current_user.export_format = payload.export_format
+    db.commit()
+    return {"export_format": current_user.export_format}

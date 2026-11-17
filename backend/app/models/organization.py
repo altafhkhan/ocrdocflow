@@ -8,7 +8,7 @@ users - they just get a 1-person org. This keeps the model consistent
 rather than having two different code paths for "solo user" vs
 "company account".
 """
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.database import Base
@@ -38,6 +38,11 @@ class Organization(Base):
     stripe_customer_id = Column(String, nullable=True, index=True)
     stripe_subscription_id = Column(String, nullable=True)
     subscription_status = Column(String, nullable=True)
+
+    # Per-customer limits set by an admin. NULL = use the plan's default
+    # (usage_service.PLAN_LIMITS / settings.PLAN_COST_CAPS_USD).
+    monthly_cost_cap_usd = Column(Numeric(10, 2), nullable=True)
+    invoice_limit_override = Column(Integer, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
