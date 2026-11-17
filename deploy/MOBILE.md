@@ -14,27 +14,38 @@ rebuild them.
 
 ## Status — what has and has not been checked
 
-- The web app still builds and type-checks with the mobile changes in it.
-- The Android and iOS projects were **generated** on a Windows PC.
-- **The Android app has not been built or run yet.** The PC it was made on
-  had no Java and no Android SDK. Follow "Android" below on a PC that has
-  Android Studio.
-- **The iOS app has not been built or run.** That can only be done on a
-  Mac. Follow "iOS" below.
-- The in-app PDF preview was tested in a desktop browser only. The camera
-  button, the share sheet for downloads and the "open website" button need
-  a real phone or an emulator to test — see the checklist at the end.
+Last updated 2026-11-18.
 
-## One server step before the apps can log in
+**Android — built and run on a virtual phone (emulator, Android 15).**
+- The test APK builds on the Windows PC (tools in `D:\Android`, see
+  "Android tools already on this PC").
+- Tested in the app against the **live** server, without logging in:
+  choosing a PDF from the phone's files, upload and reading ("done"),
+  the result screen, CSV download through the share sheet, and the
+  "Take a photo of the invoice" button opening the camera.
+- Tested in the app against the **local test** server, logged in with a
+  test account: dashboard, upload, the Review & Save screen with the
+  original PDF drawn beside the fields, and saving.
+- **Not tested yet:** the in-app Billing screen and its "open website"
+  button, the Excel download while logged in, Team/Admin pages, an
+  Arabic/Urdu document, and anything on a **real** phone.
+- Seen during testing: a photo with no invoice in it (the emulator's
+  empty room) kept the live server busy for over 3 minutes until it
+  timed out. The app now shows a clear message when that happens. A real
+  invoice photo has not been tried.
+- No signed release has been made. No Google Play account exists.
+
+**iOS — generated only.** The project in `frontend/ios` was created on
+Windows and has never been opened in Xcode, built or run. That can only
+be done on a Mac. Follow "iOS" below.
+
+## The server already allows the apps
 
 The apps call the live API at `https://ocrdocflow.qumaxa.com`. The API
-only answers pages it knows, so `backend/app/main.py` now also allows the
+only answers pages it knows, so `backend/app/main.py` also allows the
 two addresses the apps use (`https://localhost` for Android,
-`capacitor://localhost` for iOS).
-
-**That change must be deployed once** (`deploy/redeploy.sh`) before any
-app can log in or upload. Until then the app opens but every request
-fails. Nothing else on the server changes.
+`capacitor://localhost` for iOS). This was deployed on 2026-11-18, and
+the Android app was seen uploading to the live server afterwards.
 
 ## How the app differs from the website
 
@@ -84,6 +95,39 @@ For both apps, on the computer that builds them:
 
 ## Android
 
+### Android tools already on this PC
+
+Drive C: on the development PC is almost full, so Android Studio was not
+installed. The same tools were put on drive D: instead (2026-11-18):
+
+| What | Where |
+|---|---|
+| Java 21 (Microsoft OpenJDK) | `D:\Android\jdk-21` |
+| Android SDK: platform 36, build tools, emulator, one Android 15 phone image | `D:\Android\Sdk` |
+| Gradle and build libraries | `D:\Android\gradle-home` |
+| Virtual phone `ocrdocflow_test` | `D:\Android\user-home` |
+
+Four settings on the Windows user account point at them: `JAVA_HOME`,
+`ANDROID_HOME`, `GRADLE_USER_HOME`, `ANDROID_USER_HOME`. Open a **new**
+terminal for them to take effect. With these, the `gradlew` commands
+below work without Android Studio. To remove everything, delete
+`D:\Android` and those four settings.
+
+**The virtual phone is heavy for this PC** (11 GB memory, shared with
+Docker). While it ran, Windows' swap file grew and drive C: dropped to
+about 250 MB free. Close other programs first, run it for short
+sessions, and prefer a real Android phone on a USB cable. To start it:
+
+```bash
+D:/Android/Sdk/emulator/emulator.exe -avd ocrdocflow_test -memory 2048 -no-snapshot
+```
+
+Then install the test APK on it (or on a connected phone):
+
+```bash
+D:/Android/Sdk/platform-tools/adb.exe install -r frontend/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
 ### Run it (test build)
 
 ```bash
@@ -109,6 +153,25 @@ The file appears at
 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`. You can
 copy that to an Android phone and install it for testing. It cannot go on
 Google Play.
+
+### Testing against the local server (developers)
+
+A normal build always talks to the live server. To try logged-in screens
+without touching live data, the app can load its pages from the dev
+server on the PC and use the local API:
+
+1. Start the local API (root `docker-compose.yml`) and the web dev server
+   so that it listens on 127.0.0.1:
+   `npm --prefix frontend run dev -- --host 127.0.0.1`
+2. `frontend/.env.development.local` (not in git) must contain
+   `VITE_MOBILE_API_BASE_URL=http://localhost:8000`.
+3. Let the phone reach the PC's ports:
+   `adb reverse tcp:5173 tcp:5173` and `adb reverse tcp:8000 tcp:8000`.
+4. In `frontend/`: `CAP_DEV_SERVER=http://localhost:5173 npx cap sync android`,
+   then build and install the test APK as above.
+5. **Afterwards run `npx cap sync android` again without `CAP_DEV_SERVER`**
+   and rebuild, so the app goes back to its normal, self-contained form.
+   Never build a release with `CAP_DEV_SERVER` set.
 
 ### Signed release (for Google Play)
 
