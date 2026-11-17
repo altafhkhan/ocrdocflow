@@ -529,6 +529,35 @@ export interface PlansResponse {
   promo: PromoInfo | null;
   // False while Stripe runs in test mode: checkout cannot take real payments yet.
   payments_live: boolean;
+  // The loyalty coupon offer in numbers; null when it is switched off.
+  loyalty?: LoyaltyPolicy | null;
+}
+
+export interface LoyaltyPolicy {
+  percent_off: number;
+  duration_months: number;
+  valid_months_after_plan_end: number;
+  max_redemptions: number;
+}
+
+export interface LoyaltyCoupon {
+  code: string;
+  plan: string;
+  plan_name: string;
+  percent_off: number;
+  duration_months: number;
+  expires_at: string | null; // ISO date
+  used: boolean;
+  expired: boolean;
+  usable: boolean;
+}
+
+export interface LoyaltyCouponResponse {
+  coupon: LoyaltyCoupon | null;
+  // Why there is no coupon (free plan, not the owner, ...), in plain words.
+  reason: string | null;
+  policy: LoyaltyPolicy | null;
+  can_apply_to_own_subscription: boolean;
 }
 
 export async function getPlans(): Promise<PlansResponse> {
@@ -570,6 +599,51 @@ export async function createCheckoutSession(plan: string): Promise<string> {
   }
   const data = await res.json();
   return data.checkout_url;
+}
+
+async function billingPost(path: string, body: unknown, fallback: string) {
+  const res = await fetch(`${API_BASE}/api/v1/billing/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: fallback }));
+    throw new Error(err.detail);
+  }
+  return res.json();
+}
+
+// Checkout with an optional loyalty coupon. `discount_note` is set when the
+// coupon was NOT used because a bigger offer applies (one discount only).
+export async function startCheckout(
+  plan: string,
+  couponCode?: string,
+): Promise<{ checkout_url: string; discount_note: string | null }> {
+  return billingPost("create-checkout-session", { plan, coupon_code: couponCode || null }, "Could not start checkout.");
+}
+
+// The signed-in customer's own loyalty coupon (created on first request).
+export async function getLoyaltyCoupon(): Promise<LoyaltyCouponResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/billing/loyalty-coupon`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) throw new Error("Could not load your loyalty coupon.");
+  return res.json();
+}
+
+// What a typed coupon code is worth; throws with the reason if it cannot be used.
+export async function checkCoupon(code: string): Promise<LoyaltyCoupon> {
+  const data = await billingPost("check-coupon", { code }, "Could not check the coupon.");
+  return data.coupon;
+}
+
+// Use a coupon on the subscription the customer already has.
+export async function applyCouponToSubscription(code: string): Promise<{ status: string; message: string }> {
+  return billingPost("apply-coupon", { code }, "Could not apply the coupon.");
 }
 
 

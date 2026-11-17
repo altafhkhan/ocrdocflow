@@ -108,6 +108,20 @@ class Settings(BaseSettings):
     # Optional ISO date (e.g. 2026-12-31) after which the offer stops.
     PROMO_ENDS_AT: str = ""
 
+    # --- Loyalty coupon (see api/v1/billing.py) ---
+    # Every paying customer gets one coupon code: LOYALTY_PERCENT_OFF off
+    # the plan they are on, for the first LOYALTY_DURATION_MONTHS payments.
+    # They may use it themselves or give it to someone who is not a customer
+    # yet. It expires LOYALTY_VALID_MONTHS_AFTER_PLAN_END months after the
+    # end of the customer's current plan period and works
+    # LOYALTY_MAX_REDEMPTIONS time(s). Only ONE discount ever applies: while
+    # the launch promotion is running, the bigger of the two is used.
+    LOYALTY_COUPON_ENABLED: bool = True
+    LOYALTY_PERCENT_OFF: int = 25
+    LOYALTY_DURATION_MONTHS: int = 3
+    LOYALTY_VALID_MONTHS_AFTER_PLAN_END: int = 2
+    LOYALTY_MAX_REDEMPTIONS: int = 1
+
     class Config:
         env_file = ".env"
 

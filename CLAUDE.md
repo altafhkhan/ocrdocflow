@@ -25,6 +25,13 @@ rate limiting, Stripe subscriptions (starter/professional/business).
   (`LINE_ITEMS_PER_INVOICE_UNIT`); the dashboard and Billing page say so.
 - **Export** is CSV or Excel (.xlsx); the choice is saved on the user's
   account. No batch upload.
+- **Loyalty coupon**: each paying organization's owner gets one code
+  (Billing page) for 25% off their plan for 3 months, usable once by
+  them or by anyone they give it to, valid until 2 months after their
+  plan period ends. It lives entirely in Stripe (Coupon per plan,
+  Promotion Code per organization; no table of ours). One discount
+  only: a launch promotion that is at least as big wins and the coupon
+  is kept. Settings: `LOYALTY_*`.
 - Password reset: emailed single-use link, sent over SMTP (own mailbox)
   or Resend, whichever is configured. With neither set on the server the
   link only goes to the API log (see `deploy/DEPLOY.md`, "Password reset

@@ -23,9 +23,11 @@ Flow:
   4) The webhook handler updates the ORGANIZATION's plan/subscription
      status - every member of that org immediately shares the new plan.
 """
+import calendar
 import json
 import logging
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -37,6 +39,7 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.models.organization import Organization
 from app.models.user import User
+from app.services import usage_service
 
 logger = logging.getLogger("ocrdocflow.billing")
 
@@ -65,6 +68,13 @@ PLANS = {
 
 class CheckoutRequest(BaseModel):
     plan: str
+    # Optional loyalty coupon code typed on the Billing page.
+    coupon_code: str | None = None
+
+
+class CouponRequest(BaseModel):
+    code: str
+    plan: str | None = None
 
 
 class ConfirmCheckoutRequest(BaseModel):
@@ -192,6 +202,274 @@ def _promo_info(coupon) -> dict | None:
     }
 
 
+# --- Loyalty coupon ----------------------------------------------------------
+# A reward for paying customers that also brings in new ones. Each paying
+# organization gets ONE code (a Stripe Promotion Code) for 25% off the plan it
+# is on, for the first 3 payments. The owner can use it on their own
+# subscription or give it to anyone - the person redeeming it does not have to
+# be a customer already. It can be redeemed once, and expires 2 months after
+# the end of the owner's current plan period.
+#
+# Everything lives in Stripe (no table of ours):
+#   Coupon          one per plan, found again by metadata["campaign"]
+#   Promotion Code  one per organization; its id is kept in the Stripe
+#                   Customer's metadata["loyalty_code_id"]
+_LOYALTY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"   # no 0/O/1/I to misread
+_loyalty_coupon_ids: dict[str, str] = {}
+
+
+def _to_dict(stripe_object) -> dict:
+    """Stripe objects of this library version lack .get(); use plain dicts."""
+    return json.loads(str(stripe_object))
+
+
+def loyalty_policy() -> dict | None:
+    """The offer in numbers, for the Billing page. None when switched off."""
+    if not settings.LOYALTY_COUPON_ENABLED:
+        return None
+    return {
+        "percent_off": settings.LOYALTY_PERCENT_OFF,
+        "duration_months": settings.LOYALTY_DURATION_MONTHS,
+        "valid_months_after_plan_end": settings.LOYALTY_VALID_MONTHS_AFTER_PLAN_END,
+        "max_redemptions": settings.LOYALTY_MAX_REDEMPTIONS,
+    }
+
+
+def _add_months(moment: datetime, months: int) -> datetime:
+    month_index = moment.month - 1 + months
+    year, month = moment.year + month_index // 12, month_index % 12 + 1
+    day = min(moment.day, calendar.monthrange(year, month)[1])
+    return moment.replace(year=year, month=month, day=day)
+
+
+def _plan_period_end(org: Organization) -> datetime:
+    """When the organization's current paid period ends: Stripe's own date for
+    a Stripe subscription, else our usage period (plan set by an admin)."""
+    if org.stripe_subscription_id and settings.STRIPE_SECRET_KEY:
+        try:
+            subscription = _to_dict(stripe.Subscription.retrieve(org.stripe_subscription_id))
+            ends = [subscription.get("current_period_end")] + [
+                item.get("current_period_end") for item in ((subscription.get("items") or {}).get("data") or [])
+            ]
+            ends = [e for e in ends if e]
+            if ends:
+                return datetime.fromtimestamp(max(ends), tz=timezone.utc)
+        except stripe.error.StripeError:
+            logger.warning("Could not read subscription %s for the plan end date", org.stripe_subscription_id)
+    start = usage_service.get_period_start(org)
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    return start + timedelta(days=usage_service.get_period_length_days(org))
+
+
+def _loyalty_coupon_id(plan: str) -> str:
+    """The Stripe Coupon behind every loyalty code of this plan (created once)."""
+    key = f"loyalty-{settings.LOYALTY_PERCENT_OFF}-{settings.LOYALTY_DURATION_MONTHS}m-{plan}"
+    if key in _loyalty_coupon_ids:
+        return _loyalty_coupon_ids[key]
+    for coupon in stripe.Coupon.list(limit=100).auto_paging_iter():
+        data = _to_dict(coupon)
+        if (data.get("metadata") or {}).get("campaign") == key:
+            _loyalty_coupon_ids[key] = data["id"]
+            return data["id"]
+    product = _to_dict(stripe.Price.retrieve(PLAN_PRICE_IDS[plan])).get("product")
+    coupon = stripe.Coupon.create(
+        name=f"Loyalty {settings.LOYALTY_PERCENT_OFF}% off - {PLANS[plan]['name']}",
+        percent_off=settings.LOYALTY_PERCENT_OFF,
+        duration="repeating",
+        duration_in_months=settings.LOYALTY_DURATION_MONTHS,
+        # Stripe itself refuses the code on any other plan.
+        applies_to={"products": [product]},
+        metadata={"campaign": key, "app": "ocrdocflow", "plan": plan},
+    )
+    logger.info("Created loyalty coupon %s (%s)", coupon.id, key)
+    _loyalty_coupon_ids[key] = coupon.id
+    return coupon.id
+
+
+def _create_promotion_code(**params):
+    """Stripe moved the coupon reference into `promotion` in newer API
+    versions; fall back to the older `coupon=` shape if this one is refused."""
+    coupon_id = params.pop("coupon")
+    try:
+        return stripe.PromotionCode.create(promotion={"type": "coupon", "coupon": coupon_id}, **params)
+    except stripe.error.InvalidRequestError:
+        return stripe.PromotionCode.create(coupon=coupon_id, **params)
+
+
+def _loyalty_percent(code: dict) -> float:
+    return float((code.get("metadata") or {}).get("percent_off") or settings.LOYALTY_PERCENT_OFF)
+
+
+def _loyalty_info(code: dict) -> dict:
+    """Shape a loyalty Promotion Code for the frontend."""
+    meta = code.get("metadata") or {}
+    expires_at = code.get("expires_at")
+    max_redemptions = code.get("max_redemptions") or 0
+    used = bool(max_redemptions) and (code.get("times_redeemed") or 0) >= max_redemptions
+    expired = bool(expires_at) and expires_at <= datetime.now(timezone.utc).timestamp()
+    plan = meta.get("plan")
+    return {
+        "code": code.get("code"),
+        "plan": plan,
+        "plan_name": PLANS.get(plan, {}).get("name", plan),
+        "percent_off": _loyalty_percent(code),
+        "duration_months": int(meta.get("duration_months") or settings.LOYALTY_DURATION_MONTHS),
+        "expires_at": datetime.fromtimestamp(expires_at, tz=timezone.utc).date().isoformat() if expires_at else None,
+        "used": used,
+        "expired": expired,
+        "usable": bool(code.get("active")) and not used and not expired,
+    }
+
+
+def _validate_loyalty_code(raw_code: str | None, plan: str | None) -> dict:
+    """Returns the Stripe Promotion Code (dict) for a code typed by a buyer,
+    or raises a 400 saying, in plain words, why it cannot be used."""
+    code = (raw_code or "").strip().upper()
+    if not code or len(code) > 40:
+        raise HTTPException(status_code=400, detail="Please enter a coupon code.")
+    if not settings.LOYALTY_COUPON_ENABLED or not settings.STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=400, detail="Coupons are not available at the moment.")
+    try:
+        found = _to_dict(stripe.PromotionCode.list(code=code, limit=1)).get("data") or []
+    except stripe.error.StripeError:
+        logger.exception("Could not look up coupon code")
+        raise HTTPException(status_code=502, detail="Could not check the coupon. Please try again.")
+    promotion_code = found[0] if found else None
+    if promotion_code is None or (promotion_code.get("metadata") or {}).get("campaign") != "loyalty":
+        raise HTTPException(status_code=400, detail="This coupon code is not valid.")
+    info = _loyalty_info(promotion_code)
+    if info["used"]:
+        raise HTTPException(status_code=400, detail="This coupon has already been used.")
+    if info["expired"] or not info["usable"]:
+        raise HTTPException(status_code=400, detail=f"This coupon expired on {info['expires_at']}." if info["expired"] else "This coupon is no longer valid.")
+    if plan is not None and info["plan"] != plan:
+        raise HTTPException(status_code=400, detail=f"This coupon is for the {info['plan_name']} plan only.")
+    return promotion_code
+
+
+def _ensure_customer(db: Session, org: Organization, email: str) -> str:
+    if not org.stripe_customer_id:
+        customer = stripe.Customer.create(email=email, metadata={"organization_id": str(org.id)})
+        org.stripe_customer_id = customer.id
+        db.commit()
+    return org.stripe_customer_id
+
+
+@router.get("/loyalty-coupon")
+def get_loyalty_coupon(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The caller's organization's loyalty coupon, created the first time a
+    paying owner opens the Billing page. A new one is issued only when the
+    previous one ran out unused (expired, or the plan changed) - a coupon
+    that has been redeemed is finished.
+    """
+    policy = loyalty_policy()
+    org = current_user.organization
+
+    def none(reason: str) -> dict:
+        return {"coupon": None, "reason": reason, "policy": policy, "can_apply_to_own_subscription": False}
+
+    if policy is None or not settings.STRIPE_SECRET_KEY:
+        return none("Loyalty coupons are not available at the moment.")
+    if org is None or org.plan not in PLAN_PRICE_IDS:
+        return none("Subscribe to a paid plan to receive your loyalty coupon.")
+    if current_user.org_role != "owner":
+        return none("Your organization's owner can see and share the loyalty coupon.")
+
+    try:
+        customer_id = _ensure_customer(db, org, current_user.email)
+        customer = _to_dict(stripe.Customer.retrieve(customer_id))
+        code_id = (customer.get("metadata") or {}).get("loyalty_code_id")
+        code = _to_dict(stripe.PromotionCode.retrieve(code_id)) if code_id else None
+
+        if code is not None:
+            info = _loyalty_info(code)
+            if info["used"]:
+                pass  # redeemed: this customer's coupon is finished
+            elif info["expired"] or info["plan"] != org.plan or not info["usable"]:
+                # Ran out unused, or the customer changed plan: replace it.
+                if code.get("active"):
+                    stripe.PromotionCode.modify(code["id"], active=False)
+                code = None
+
+        if code is None:
+            expires = _add_months(_plan_period_end(org), settings.LOYALTY_VALID_MONTHS_AFTER_PLAN_END)
+            created = _create_promotion_code(
+                coupon=_loyalty_coupon_id(org.plan),
+                code="LOYAL-" + "".join(secrets.choice(_LOYALTY_ALPHABET) for _ in range(8)),
+                max_redemptions=settings.LOYALTY_MAX_REDEMPTIONS,
+                expires_at=int(expires.timestamp()),
+                metadata={
+                    "campaign": "loyalty", "app": "ocrdocflow", "organization_id": str(org.id),
+                    "plan": org.plan, "percent_off": str(settings.LOYALTY_PERCENT_OFF),
+                    "duration_months": str(settings.LOYALTY_DURATION_MONTHS),
+                },
+            )
+            code = _to_dict(created)
+            stripe.Customer.modify(customer_id, metadata={"loyalty_code_id": code["id"]})
+            logger.warning("Issued loyalty coupon for organization '%s' (id %s), valid until %s.",
+                           org.name, org.id, expires.date().isoformat())
+    except stripe.error.StripeError:
+        logger.exception("Could not load/create the loyalty coupon")
+        return none("Your loyalty coupon could not be loaded just now. Please try again later.")
+
+    info = _loyalty_info(code)
+    return {
+        "coupon": info,
+        "reason": None,
+        "policy": policy,
+        "can_apply_to_own_subscription": bool(info["usable"] and org.stripe_subscription_id
+                                              and org.subscription_status == "active"),
+    }
+
+
+@router.post("/check-coupon")
+def check_coupon(payload: CouponRequest, _user: User = Depends(get_current_user)):
+    """Tells the Billing page what a typed code is worth, before checkout."""
+    return {"coupon": _loyalty_info(_validate_loyalty_code(payload.code, payload.plan))}
+
+
+@router.post("/apply-coupon")
+def apply_coupon_to_subscription(
+    payload: CouponRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """An existing subscriber uses a loyalty coupon on the subscription they
+    already have: the discount starts with their next payment."""
+    org = current_user.organization
+    if org is None:
+        raise HTTPException(status_code=400, detail="No organization found for this account.")
+    if current_user.org_role != "owner":
+        raise HTTPException(status_code=403, detail="Only the organization's owner can manage billing.")
+    if not org.stripe_subscription_id or org.subscription_status != "active":
+        raise HTTPException(status_code=400, detail="You have no active subscription. Enter the coupon when you subscribe instead.")
+
+    code = _validate_loyalty_code(payload.code, org.plan)
+    try:
+        subscription = _to_dict(stripe.Subscription.retrieve(org.stripe_subscription_id))
+        if subscription.get("discounts") or subscription.get("discount"):
+            raise HTTPException(
+                status_code=400,
+                detail="Your subscription already has a discount, and only one discount can be used at a time. "
+                       "You can give this coupon to someone else instead.",
+            )
+        stripe.Subscription.modify(org.stripe_subscription_id, discounts=[{"promotion_code": code["id"]}])
+    except stripe.error.StripeError as exc:
+        logger.warning("Could not apply loyalty coupon to subscription %s: %s", org.stripe_subscription_id, exc)
+        raise HTTPException(status_code=400, detail="This coupon could not be applied to your subscription.")
+
+    info = _loyalty_info(code)
+    logger.warning("Organization '%s' (id %s) applied a loyalty coupon to its subscription.", org.name, org.id)
+    return {
+        "status": "applied",
+        "message": f"Coupon applied: {info['percent_off']:g}% off your next {info['duration_months']} payments.",
+    }
+
+
 @router.get("/plans")
 def list_plans():
     promo = _promo_info(_get_or_create_promo_coupon())
@@ -201,7 +479,7 @@ def list_plans():
         if promo:
             entry["promo_price_usd"] = round(plan["price_usd"] * (100 - promo["percent_off"]) / 100, 2)
         plans[key] = entry
-    return {"plans": plans, "promo": promo, "payments_live": payments_live()}
+    return {"plans": plans, "promo": promo, "payments_live": payments_live(), "loyalty": loyalty_policy()}
 
 
 def payments_live() -> bool:
@@ -254,16 +532,38 @@ def create_checkout_session(
         metadata={"organization_id": str(org.id), "plan": payload.plan},
     )
 
-    # Launch promotion: apply the coupon while seats remain. Stripe counts a
-    # redemption when the subscription is actually created, so two people
-    # racing for the last seat are resolved by Stripe, not by us.
+    # Only ONE discount ever applies to a subscription.
+    #  - Launch promotion: applied automatically while seats remain. Stripe
+    #    counts a redemption when the subscription is actually created, so
+    #    two people racing for the last seat are resolved by Stripe, not us.
+    #  - Loyalty coupon: only when the buyer typed a code. If the launch
+    #    offer is at least as big, the launch offer is used and the coupon
+    #    is left untouched for later.
     coupon = _get_or_create_promo_coupon()
-    if _promo_info(coupon):
+    promo = _promo_info(coupon)
+    loyalty_code = _validate_loyalty_code(payload.coupon_code, payload.plan) if (payload.coupon_code or "").strip() else None
+    discount_note = None
+    used_loyalty = False
+    if loyalty_code and promo and (promo["percent_off"] or 0) >= _loyalty_percent(loyalty_code):
+        session_params["discounts"] = [{"coupon": coupon["id"]}]
+        discount_note = (
+            f"Only one discount can be used at a time. The launch offer ({promo['percent_off']:g}% off) is bigger "
+            f"than your coupon ({_loyalty_percent(loyalty_code):g}% off), so the launch offer is applied. Your coupon "
+            f"has not been used and stays valid until {_loyalty_info(loyalty_code)['expires_at']}."
+        )
+    elif loyalty_code:
+        session_params["discounts"] = [{"promotion_code": loyalty_code["id"]}]
+        used_loyalty = True
+    elif promo:
         session_params["discounts"] = [{"coupon": coupon["id"]}]
 
     try:
         session = stripe.checkout.Session.create(**session_params)
     except stripe.error.StripeError as exc:
+        if used_loyalty:
+            # Never fall back to full price behind the buyer's back.
+            logger.warning("Checkout with loyalty coupon failed: %s", exc)
+            raise HTTPException(status_code=400, detail="This coupon could not be applied. Please check the code or subscribe without it.")
         if "discounts" in session_params:
             # Most likely the last seat went just now - retry at full price
             # rather than failing the upgrade.
@@ -278,7 +578,7 @@ def create_checkout_session(
             logger.exception("Stripe checkout session creation failed")
             raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
 
-    return {"checkout_url": session.url}
+    return {"checkout_url": session.url, "discount_note": discount_note}
 
 
 @router.post("/confirm-checkout")
