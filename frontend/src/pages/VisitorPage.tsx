@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { UPLOAD_LANGUAGES } from "../languages";
 import { useNavigate } from "react-router-dom";
 import UploadDropZone from "../components/UploadDropZone";
+import { FileNameCell, UploadedCell, UploadColumns } from "../components/UploadCells";
 import {
   visitorUpload, listVisitorDocuments, getVisitorExtraction, downloadVisitorCsv,
 } from "../api";
@@ -13,13 +14,6 @@ interface DocRow {
   language: string;
   uploaded_at: string;
 }
-
-const STATUS_STYLES: Record<string, string> = {
-  uploaded: "bg-gray-100 text-gray-700",
-  processing: "bg-yellow-100 text-yellow-800",
-  done: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-};
 
 export default function VisitorPage() {
   const [docs, setDocs] = useState<DocRow[]>([]);
@@ -112,7 +106,7 @@ export default function VisitorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-3xl mx-auto">
         <div className="flex justify-between items-center mb-2">
           <h1 className="text-2xl font-bold">OCRDocFlow — Try it free</h1>
@@ -197,26 +191,21 @@ export default function VisitorPage() {
               </button>
             )}
           </div>
-          <table className="w-full text-left text-sm">
+          <table className="w-full table-fixed text-left text-sm">
+            <UploadColumns />
             <thead className="bg-gray-100">
               <tr>
                 <th className="p-3">File</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Uploaded</th>
+                <th className="py-3 px-2">Uploaded</th>
                 <th className="p-3"></th>
               </tr>
             </thead>
             <tbody>
               {docs.map((d) => (
                 <tr key={d.id} className="border-t text-sm">
-                  <td className="p-3">{d.original_filename}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${STATUS_STYLES[d.status] || ""}`}>
-                      {d.status}
-                    </span>
-                  </td>
-                  <td className="p-3">{new Date(d.uploaded_at).toLocaleString()}</td>
-                  <td className="p-3">
+                  <FileNameCell name={d.original_filename} status={d.status} />
+                  <UploadedCell at={d.uploaded_at} />
+                  <td className="p-3 align-top">
                     {d.status === "done" && (
                       <button onClick={() => handleView(d.id)} className="text-blue-600 hover:underline text-xs">
                         View
@@ -227,7 +216,7 @@ export default function VisitorPage() {
               ))}
               {docs.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-3 text-center text-gray-400">
+                  <td colSpan={3} className="p-3 text-center text-gray-400">
                     No uploads yet.
                   </td>
                 </tr>

@@ -87,8 +87,11 @@ export default function UploadDropZone({ inputRef, disabled, busy, idleText, onF
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`block border-2 border-dashed rounded-lg p-6 text-center transition-colors ${look}`}
+      className={`relative overflow-hidden block border-2 border-dashed rounded-lg p-6 text-center transition-colors ${look}`}
     >
+      {/* While a document is being sent and read, a light bar sweeps up and
+          down the box like a scanner, so it is obvious the job is running. */}
+      {busy && <span aria-hidden="true" className="scan-bar" />}
       <input
         ref={inputRef}
         type="file"

@@ -1,3 +1,20 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Scanner effect shown in the upload box while a document is being read
+   (see UploadDropZone.tsx): a glowing bar that travels down and back up. */
+.scan-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: #3b82f6;
+  box-shadow: 0 0 10px 3px rgba(59, 130, 246, 0.55);
+  animation: scan-sweep 1.6s ease-in-out infinite alternate;
+}
+@keyframes scan-sweep {
+  from { top: 0; }
+  to { top: calc(100% - 3px); }
+}
