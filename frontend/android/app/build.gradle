@@ -28,7 +28,10 @@ android {
                 storeFile rootProject.file(keystore['storeFile'])
                 storePassword keystore['storePassword']
                 keyAlias keystore['keyAlias']
-                keyPassword keystore['keyPassword']
+                // Keys made with keytool today use one password for both the
+                // file and the key, so keyPassword may be left out.
+                def keyPw = keystore['keyPassword']
+                keyPassword((keyPw && keyPw != 'CHANGE_ME') ? keyPw : keystore['storePassword'])
             }
         }
     }

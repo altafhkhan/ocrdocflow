@@ -33,7 +33,10 @@ Last updated 2026-11-18.
   empty room) kept the live server busy for over 3 minutes until it
   timed out. The app now shows a clear message when that happens. A real
   invoice photo has not been tried.
-- No signed release has been made. No Google Play account exists.
+- A signed release (version 1.0, build 1) was built and its signature
+  verified on 2026-11-19: `D:/Android/release/OCRDocFlow-1.0-build1.aab`
+  (for Google Play) and the matching `.apk`. The signed build has not
+  been run on a phone. Nothing has been uploaded to Google Play.
 
 **iOS — generated only.** The project in `frontend/ios` was created on
 Windows and has never been opened in Xcode, built or run. That can only
@@ -287,10 +290,11 @@ show up.
 
 ## Things you will want to do before publishing
 
-- **App icon and splash screen.** Both projects still have Capacitor's
-  default icon. Put a 1024×1024 `icon.png` (and optionally a 2732×2732
-  `splash.png`) in `frontend/assets/`, then run
-  `npx @capacitor/assets generate` inside `frontend/` and rebuild.
+- **App icon and splash screen** use the Qumaxa logo
+  (`frontend/assets/logo.png`). To change it, replace that file and run
+  `python frontend/assets/make_icons.py`, then rebuild. The same script
+  writes `play-store-icon-512.png` and `app-store-icon-1024.png` for the
+  store listings.
 - **Privacy policy page** on the website — both stores require a link.
 - **How long a login lasts.** The server setting
   `ACCESS_TOKEN_EXPIRE_MINUTES` decides when a user is asked to log in
