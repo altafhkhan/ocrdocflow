@@ -3,6 +3,7 @@ import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,7 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.models.document import Document
 from app.models.extracted_invoice import ExtractedInvoiceHeader, ExtractedInvoiceItem
+from app.models.invoice import Invoice
 from app.models.user import User
 from app.services import ai_cost, ocr_service, field_extractor, usage_service, language_detector
 from app.services.csv_headers import SUPPORTED_LANGUAGES
@@ -258,7 +260,34 @@ def list_my_documents(
     # Tenant/ownership isolation: a user only ever sees their OWN documents.
     # (Security Policy Section 8 - Tenant Isolation)
     docs = db.query(Document).filter(Document.user_id == current_user.id).all()
-    return docs
+
+    # "review_status" tells the upload list what happened after reading:
+    #   "saved"        - every invoice in the file was confirmed with Save
+    #   "partly saved" - a multi-invoice file with some still to review
+    #   None           - nothing saved yet (the list then shows doc.status)
+    # A document counts as saved from the permanent invoices table, not the
+    # staging one, because staging rows of old uploads get cleared.
+    doc_ids = [d.id for d in docs]
+    saved: dict[int, int] = {}
+    pending: dict[int, int] = {}
+    if doc_ids:
+        for (doc_id,) in db.query(Invoice.document_id).filter(Invoice.document_id.in_(doc_ids)):
+            saved[doc_id] = saved.get(doc_id, 0) + 1
+        for (doc_id,) in db.query(ExtractedInvoiceHeader.document_id).filter(
+            ExtractedInvoiceHeader.document_id.in_(doc_ids),
+            ExtractedInvoiceHeader.status == "pending_review",
+        ):
+            pending[doc_id] = pending.get(doc_id, 0) + 1
+
+    rows = []
+    for d in docs:
+        row = jsonable_encoder(d)
+        if saved.get(d.id):
+            row["review_status"] = "partly saved" if pending.get(d.id) else "saved"
+        else:
+            row["review_status"] = None
+        rows.append(row)
+    return rows
 
 
 _MEDIA_TYPES = {"pdf": "application/pdf", "jpg": "image/jpeg", "png": "image/png"}

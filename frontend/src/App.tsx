@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -10,12 +10,18 @@ import BillingPage from "./pages/BillingPage";
 import TeamPage from "./pages/TeamPage";
 import MobileBillingPage from "./pages/MobileBillingPage";
 import { isNativeApp } from "./native";
+import { getToken } from "./api";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<VisitorPage />} />
+        {/* In the phone app, someone who is already signed in goes straight to
+            their documents instead of the free-trial page. */}
+        <Route
+          path="/"
+          element={isNativeApp && getToken() ? <Navigate to="/dashboard" replace /> : <VisitorPage />}
+        />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />

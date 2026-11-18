@@ -11,6 +11,7 @@ interface DocRow {
   id: number;
   original_filename: string;
   status: string;
+  review_status?: string | null;
   uploaded_at: string;
   language: string;
   detected_language: string | null;
@@ -332,15 +333,15 @@ export default function Dashboard() {
               <tbody>
                 {docs.map((d) => (
                   <tr key={d.id} className="border-t text-sm">
-                    <FileNameCell name={d.original_filename} status={d.status} />
+                    <FileNameCell name={d.original_filename} status={d.status} reviewStatus={d.review_status} />
                     <UploadedCell at={d.uploaded_at} />
                     <td className="p-3 align-top">
-                      {(d.status === "done" || d.status === "failed") && (
+                      {d.status === "failed" && (
                         <button
                           onClick={() => openDocument(d.id)}
                           className="block text-left text-blue-600 hover:underline text-xs"
                         >
-                          View Text
+                          See why
                         </button>
                       )}
                       {d.status === "done" && (
@@ -349,7 +350,7 @@ export default function Dashboard() {
                             setReviewingDocId(d.id);
                             setReviewingLanguage(d.language === "auto" ? d.detected_language ?? "en" : d.language);
                           }}
-                          className="block text-left mt-1 text-purple-600 hover:underline text-xs"
+                          className="block text-left text-purple-600 hover:underline text-xs"
                         >
                           Review &amp; Save
                         </button>
@@ -386,29 +387,9 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {viewingDoc.status === "failed" ? (
-              <p className="text-red-600 text-sm">
-                OCR failed: {viewingDoc.error_message || "Unknown error"}
-              </p>
-            ) : (
-              <>
-                <p className="text-xs text-gray-500 mb-3">
-                  {viewingDoc.page_count} page(s) - language: {viewingDoc.language}
-                </p>
-                {viewingDoc.detected_language &&
-                  viewingDoc.language !== "auto" &&
-                  viewingDoc.detected_language !== viewingDoc.language && (
-                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
-                      ⚠ You selected "{viewingDoc.language}", but this document's text looks like
-                      it's actually "{viewingDoc.detected_language}". OCR accuracy may be lower than
-                      expected - consider re-uploading with the correct language selected.
-                    </p>
-                  )}
-                <pre dir="auto" className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded border">
-                  {viewingDoc.ocr_text || "(No text was found in this document.)"}
-                </pre>
-              </>
-            )}
+            <p className="text-red-600 text-sm">
+              OCR failed: {viewingDoc.error_message || "Unknown error"}
+            </p>
           </div>
         </div>
       )}
@@ -418,7 +399,10 @@ export default function Dashboard() {
           documentId={reviewingDocId}
           language={reviewingLanguage}
           onClose={() => setReviewingDocId(null)}
-          onSaved={() => setMessage("Invoice saved successfully!")}
+          onSaved={() => {
+            setMessage("Invoice saved successfully!");
+            refreshList(); // the row's tag changes from "done" to "saved"
+          }}
         />
       )}
     </div>
