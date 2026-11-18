@@ -61,6 +61,10 @@ export default function Register() {
         <p className="text-sm text-center mt-4">
           Already have an account? <Link to="/login" className="text-blue-600">Log In</Link>
         </p>
+        <p className="text-xs text-center text-gray-500 mt-4">
+          By creating an account you accept our{" "}
+          <Link to="/privacy" className="underline">Privacy notice</Link>.
+        </p>
       </form>
     </div>
   );

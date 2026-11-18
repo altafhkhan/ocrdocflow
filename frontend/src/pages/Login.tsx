@@ -53,6 +53,9 @@ export default function Login() {
         <p className="text-sm text-center mt-2">
           No account? <Link to="/register" className="text-blue-600">Register</Link>
         </p>
+        <p className="text-xs text-center mt-4">
+          <Link to="/privacy" className="text-gray-500 underline">Privacy notice</Link>
+        </p>
       </form>
     </div>
   );

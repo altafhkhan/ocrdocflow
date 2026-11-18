@@ -231,6 +231,11 @@ export default function VisitorPage() {
             Create a free account
           </button>
         </div>
+        <p className="text-xs text-center mt-4">
+          <button onClick={() => navigate("/privacy")} className="text-gray-500 underline">
+            Privacy notice
+          </button>
+        </p>
       </div>
 
       {viewingExtraction && (

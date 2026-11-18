@@ -9,6 +9,7 @@ import VisitorPage from "./pages/VisitorPage";
 import BillingPage from "./pages/BillingPage";
 import TeamPage from "./pages/TeamPage";
 import MobileBillingPage from "./pages/MobileBillingPage";
+import PrivacyPage from "./pages/PrivacyPage";
 import { isNativeApp } from "./native";
 import { getToken } from "./api";
 
@@ -31,6 +32,7 @@ export default function App() {
         {/* The apps never sell plans (no Apple/Google purchase): plans are bought on the website. */}
         <Route path="/billing" element={isNativeApp ? <MobileBillingPage /> : <BillingPage />} />
         <Route path="/team" element={<TeamPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
       </Routes>
     </BrowserRouter>
   );
