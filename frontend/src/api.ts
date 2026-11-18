@@ -129,6 +129,12 @@ export async function listDocuments() {
   const res = await fetch(`${API_BASE}/api/v1/documents/`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
+  if (res.status === 401) {
+    // The login has run out (or is no longer valid): forget it and ask the
+    // user to sign in again, instead of leaving them on a page of errors.
+    localStorage.removeItem("token");
+    window.location.assign("/login");
+  }
   if (!res.ok) throw new Error("Could not load documents.");
   return res.json();
 }

@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    # How long a login lasts. 43200 minutes = 30 days, so the phone apps (and
+    # the website) ask for the password about once a month, not every 15 minutes.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     MAX_UPLOAD_SIZE_MB: int = 10
     # MVP limit - synchronous OCR processing (one request = one document,
