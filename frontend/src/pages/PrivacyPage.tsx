@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 // provider or tier, retention, a new processor), change this page and its
 // version/date in the same commit. The wording needs the owner's approval
 // before a new version goes live.
-const VERSION = "1.0";
+const VERSION = "1.1";
 const EFFECTIVE = "19 November 2026";
 const PRIVACY_EMAIL = "privacy@qumaxa.com";
 const COMPANY_POLICY = "https://qumaxa.com/privacy-policy";
@@ -130,8 +130,15 @@ export default function PrivacyPage() {
         <Section id="keep" title="6. How long we keep it">
           <ul className="list-disc pl-5 space-y-2">
             <li>
-              <strong>With an account:</strong> your documents and extracted data are kept until you ask us
-              to delete them or your account is closed.
+              <strong>On a paid plan:</strong> your documents and invoice records are kept until your
+              current subscription period closes. From the day after it closes they are due for deletion
+              from our servers and may be removed at any time. This applies when you continue your
+              subscription into the next period as well, so download your invoices (CSV or Excel) before
+              each period ends. Your account itself is not deleted.
+            </li>
+            <li>
+              <strong>On the free plan:</strong> your documents and extracted data are kept until you ask
+              us to delete them or your account is closed.
             </li>
             <li>
               <strong>Free trial without an account:</strong> uploaded files and their extracted data are

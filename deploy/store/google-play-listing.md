@@ -183,9 +183,11 @@ First release of OCRDocFlow for Android.
 
 ## Before you submit — open points
 
-1. **Privacy notice wording needs your approval.** It was drafted from
-   what the code does (`frontend/src/pages/PrivacyPage.tsx`) and has not
-   been reviewed by you or a lawyer. It is not deployed yet.
+1. **Privacy notice** (`frontend/src/pages/PrivacyPage.tsx`) is live,
+   approved by the owner on 2026-11-19, version 1.1. It has not been
+   reviewed by a lawyer. Version 1.1 says paid-plan invoices are due for
+   deletion the day after each subscription period closes; the automatic
+   deletion and its warning emails are **not built yet**.
 2. **privacy@qumaxa.com must be a working mailbox.** The notice and the
    deletion link depend on it.
 3. **Free Gemini tier.** The notice tells users plainly that, during the
@@ -197,6 +199,7 @@ First release of OCRDocFlow for Android.
    restricts apps from leading users to other ways of paying for digital
    services. Safest for review is to remove that button and keep only
    the sentence that plans are managed in the account on the website.
+   Owner's decision 2026-11-19: keep the button for now.
 5. **Reviewer account.** Create it before filling in "App access".
 6. **Personal vs company developer account.** A new personal account
    must run a closed test with 12 testers for 14 days before production.
