@@ -41,7 +41,7 @@ def _get_owned_document(document_id: int, db: Session, current_user: User) -> Do
     # another user's document by guessing an ID (Security Policy Section 8).
     doc = (
         db.query(Document)
-        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .filter(Document.id == document_id, Document.user_id == current_user.id, Document.purged_at.is_(None))
         .first()
     )
     if doc is None:

@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 // provider or tier, retention, a new processor), change this page and its
 // version/date in the same commit. The wording needs the owner's approval
 // before a new version goes live.
-const VERSION = "1.1";
+const VERSION = "1.2";
 const EFFECTIVE = "19 November 2026";
 const PRIVACY_EMAIL = "privacy@qumaxa.com";
 const COMPANY_POLICY = "https://qumaxa.com/privacy-policy";
@@ -134,11 +134,19 @@ export default function PrivacyPage() {
               current subscription period closes. From the day after it closes they are due for deletion
               from our servers and may be removed at any time. This applies when you continue your
               subscription into the next period as well, so download your invoices (CSV or Excel) before
-              each period ends. Your account itself is not deleted.
+              each period ends. We send reminder emails to the members of your organization before a
+              period closes. When a paid plan ends, the documents uploaded under it are due for deletion
+              from the next day in the same way. Your account itself is not deleted and continues on the
+              free plan.
             </li>
             <li>
-              <strong>On the free plan:</strong> your documents and extracted data are kept until you ask
-              us to delete them or your account is closed.
+              <strong>On the free plan:</strong> documents you upload while on the free plan and their
+              extracted data are kept until you ask us to delete them or your account is closed.
+            </li>
+            <li>
+              <strong>What remains after deletion:</strong> a record that a document was uploaded (the
+              date, how many invoices it counted as and what it cost us to process), without its name or
+              contents, is kept for billing and usage limits.
             </li>
             <li>
               <strong>Free trial without an account:</strong> uploaded files and their extracted data are

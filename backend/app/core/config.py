@@ -124,6 +124,16 @@ class Settings(BaseSettings):
     LOYALTY_VALID_MONTHS_AFTER_PLAN_END: int = 2
     LOYALTY_MAX_REDEMPTIONS: int = 1
 
+    # --- Invoice retention (see services/retention_service.py) ---
+    # The day after a paid plan's period closes, the invoices uploaded in
+    # it are deleted; warning emails go out first (80%/90% of the quota,
+    # 90%/95% of the period).
+    #   "off"     - the job does not run
+    #   "dry_run" - it only writes to the log what it WOULD email and delete
+    #   "on"      - it sends the emails and deletes
+    RETENTION_MODE: str = "dry_run"
+    RETENTION_INTERVAL_MINUTES: int = 60
+
     class Config:
         env_file = ".env"
 

@@ -12,16 +12,13 @@ one invoice can span multiple pages (still counts as one). See
 Document.detected_invoice_count, set after field extraction runs.
 
 Billing period: a rolling window from the organization's
-plan_started_at (or created_at if that's unset). The window LENGTH is
-plan-specific (confirmed with a concrete example):
-  - Starter: bills monthly, usage period is 1 month
-  - Professional: bills monthly, but the USAGE PERIOD is 2 months long -
-    e.g. invoices unused in month 1 remain usable through the end of
-    month 2, then the period resets
-  - Business: same idea, 4-month usage period
+plan_started_at (or created_at if that's unset). Every plan's period is
+one month (30 days): the invoice count starts again each period, and on
+paid plans the invoices of a closed period are deleted the next day
+(services/retention_service.py).
 
-Warnings: logged at 90% and 95% of quota - see email_service.py for
-actually sending them (SendGrid).
+Warnings: emails at 80% and 90% of the quota are sent by the retention
+job (services/retention_service.py), not from here.
 """
 import logging
 from datetime import datetime, timedelta, timezone
@@ -40,17 +37,17 @@ PLAN_LIMITS = {
     "free": 10,
     "starter": 500,
     "professional": 3000,
-    "business": 15000,
+    "business": 12000,
 }
 
 PLAN_PERIOD_DAYS = {
     "free": 30,
     "starter": 30,
-    "professional": 60,
-    "business": 120,
+    "professional": 30,
+    "business": 30,
 }
 
-WARNING_THRESHOLDS = [0.90, 0.95]
+WARNING_THRESHOLDS = [0.80, 0.90]
 
 
 def get_plan_limit(org: Organization) -> int:
@@ -64,28 +61,38 @@ def get_period_length_days(org: Organization) -> int:
     return PLAN_PERIOD_DAYS.get(org.plan, PLAN_PERIOD_DAYS["free"])
 
 
-def get_period_start(org: Organization) -> datetime:
+def _utc(moment: datetime) -> datetime:
+    # SQLite (tests) hands datetimes back without a time zone.
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def get_period_start(org: Organization, now: datetime | None = None) -> datetime:
     """
     Start of the organization's CURRENT billing/usage period - a rolling
-    window from plan_started_at (or created_at if unset), with a length
-    that depends on the plan (see PLAN_PERIOD_DAYS above).
+    window from plan_started_at (or created_at if unset), one month long
+    (see PLAN_PERIOD_DAYS above).
     """
-    reference = org.plan_started_at or org.created_at
+    reference = _utc(org.plan_started_at or org.created_at)
     period_days = get_period_length_days(org)
-    now = datetime.now(timezone.utc)
-    days_elapsed = (now - reference).days
+    now = now or datetime.now(timezone.utc)
+    days_elapsed = max((now - reference).days, 0)
     period_number = days_elapsed // period_days
     return reference + timedelta(days=period_number * period_days)
 
 
-def get_usage_this_period(db: Session, org: Organization) -> int:
+def get_period_end(org: Organization) -> datetime:
+    """When the current period closes (and the invoice count starts again)."""
+    return get_period_start(org) + timedelta(days=get_period_length_days(org))
+
+
+def get_usage_this_period(db: Session, org: Organization, period_start: datetime | None = None) -> int:
     """
     Plan invoices used by documents uploaded by ANY member of this
     organization within the current billing period. A long invoice counts
     as several (billable_invoice_count, see services/ai_cost.py); older
     documents without that figure count their detected invoices.
     """
-    period_start = get_period_start(org)
+    period_start = period_start or get_period_start(org)
     member_ids = [row[0] for row in db.query(User.id).filter(User.organization_id == org.id).all()]
     if not member_ids:
         return 0
@@ -132,9 +139,9 @@ def check_quota_before_upload(db: Session, user: User) -> None:
 
 def log_usage_warnings(db: Session, user: User, usage_before: int, usage_after: int) -> None:
     """
-    Logs a warning (and, once email_service.py is wired in, actually
-    sends one) if this upload just pushed the ORGANIZATION's usage past
-    a 90% or 95% threshold for the first time this period.
+    Writes a log line when this upload pushed the ORGANIZATION's usage
+    past 80% or 90% of its quota. The customer's email about it is sent by
+    the retention job (services/retention_service.py) on its next run.
     """
     if user.role == "admin" or user.organization is None:
         return
@@ -148,7 +155,7 @@ def log_usage_warnings(db: Session, user: User, usage_before: int, usage_after: 
         threshold_count = limit * threshold
         if usage_before < threshold_count <= usage_after:
             logger.info(
-                "Would send %.0f%% usage warning email to organization '%s' "
+                "Usage passed %.0f%% of the quota for organization '%s' "
                 "(triggered by %s, plan=%s, usage=%d/%d)",
                 threshold * 100, org.name, user.email, org.plan, usage_after, limit,
             )

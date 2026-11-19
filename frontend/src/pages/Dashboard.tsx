@@ -191,6 +191,15 @@ export default function Dashboard() {
   )}
               </p>
             )}
+            {currentUser &&
+              currentUser.role !== "admin" &&
+              currentUser.plan !== "free" &&
+              currentUser.billing_period_end && (
+                <p className="text-xs text-amber-700 mt-1">
+                  This period ends on {new Date(currentUser.billing_period_end).toLocaleDateString()}. Download your
+                  invoices before then: they are deleted from our servers the next day.
+                </p>
+              )}
           </div>
           <div className="flex items-center gap-4">
             <button

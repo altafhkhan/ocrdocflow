@@ -72,6 +72,9 @@ export interface CurrentUser {
   invoices_this_period: number | null;
   billing_period_limit: number | null;
   billing_period_start: string | null;
+  // When the current plan period closes. On a paid plan the invoices
+  // uploaded before it are deleted the day after.
+  billing_period_end?: string | null;
   export_format?: string;
 }
 

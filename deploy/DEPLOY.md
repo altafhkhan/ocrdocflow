@@ -157,6 +157,41 @@ API log instead, so an operator can still help a locked-out user:
 docker logs --since 30m ocrdocflow-api 2>&1 | grep "Password reset link"
 ```
 
+## Invoice retention (warning emails and automatic deletion)
+
+Rule: every plan's period is 30 days. On a paid plan, the day after a
+period closes, everything uploaded before the close is deleted (stored
+file, read text, review data, saved invoices), also when the customer
+continues. When a paid plan ends, the same happens the day after. Free-plan
+uploads are not touched. The document row stays (`documents.purged_at`
+set) so usage counts and AI cost reports still add up.
+
+Emails, to every member of the organization: at 80% and 90% of the invoice
+quota (all plans), at 90% and 95% of the period passed (paid plans), and
+when a paid plan has ended. Nothing is deleted for a period unless that
+period's warning email was really sent, and never sooner than a day after
+it. Organizations with a platform admin among their members are skipped.
+
+The job runs inside the API container once an hour. `RETENTION_MODE` in
+`/opt/ocrdocflow/backend/.env` controls it:
+
+| Value | What happens |
+|---|---|
+| `dry_run` (default) | Only writes to the API log what it would email and delete |
+| `on` | Sends the emails and deletes |
+| `off` | The job does not run |
+
+See what it would do right now, changing nothing:
+
+    docker exec ocrdocflow-api python -m app.scripts.retention_run --dry-run
+
+To switch it on: make sure email sending works (see "Password reset
+email"), set `RETENTION_MODE=on` in the server's `.env`, then
+`cd /opt/ocrdocflow/deploy && docker compose up -d`. Documents from
+periods that closed before the switch are not deleted straight away: they
+go the day after the first period for which a warning email went out.
+Deletion cannot be undone.
+
 ## Redeploying after a code change
 
 One command from the dev machine (Git Bash), after committing:

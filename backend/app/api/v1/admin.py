@@ -146,6 +146,10 @@ def update_user(
             raise HTTPException(status_code=400, detail="This user has no organization to update.")
         if org.plan != payload.plan:
             changes.append(f"plan: {org.plan} -> {payload.plan} (organization: {org.name})")
+            # A paid plan ending starts the one-day countdown to deleting
+            # its invoices (services/retention_service.py).
+            leaving_paid = org.plan != "free" and payload.plan == "free"
+            org.paid_plan_ended_at = datetime.now(timezone.utc) if leaving_paid else None
             org.plan = payload.plan
             # Our stand-in for "a payment happened" until real
             # self-service billing exists - starts a fresh billing

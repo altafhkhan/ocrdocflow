@@ -50,4 +50,8 @@ class Document(Base):
     ai_output_tokens = Column(Integer, nullable=True)
     ai_cost_usd = Column(Numeric(12, 6), nullable=True)
     error_message = Column(String, nullable=True)
+    # Set when the retention job removed this document's content (the file,
+    # its text and its invoices) after the plan period closed. The row
+    # itself stays, so usage counts and AI cost reports still add up.
+    purged_at = Column(DateTime(timezone=True), nullable=True, index=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -259,7 +259,11 @@ def list_my_documents(
 ):
     # Tenant/ownership isolation: a user only ever sees their OWN documents.
     # (Security Policy Section 8 - Tenant Isolation)
-    docs = db.query(Document).filter(Document.user_id == current_user.id).all()
+    docs = (
+        db.query(Document)
+        .filter(Document.user_id == current_user.id, Document.purged_at.is_(None))
+        .all()
+    )
 
     # "review_status" tells the upload list what happened after reading:
     #   "saved"        - every invoice in the file was confirmed with Save
@@ -306,7 +310,7 @@ def get_document_file(
     """
     doc = (
         db.query(Document)
-        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .filter(Document.id == document_id, Document.user_id == current_user.id, Document.purged_at.is_(None))
         .first()
     )
     if doc is None:
@@ -328,7 +332,7 @@ def get_document(
     # a user can never fetch another user's document by guessing an ID.
     doc = (
         db.query(Document)
-        .filter(Document.id == document_id, Document.user_id == current_user.id)
+        .filter(Document.id == document_id, Document.user_id == current_user.id, Document.purged_at.is_(None))
         .first()
     )
     if doc is None:

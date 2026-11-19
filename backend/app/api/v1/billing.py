@@ -62,7 +62,7 @@ FRONTEND_URL = settings.FRONTEND_URL
 PLANS = {
     "starter": {"name": "Starter", "price_usd": 19, "invoices_per_month": 500},
     "professional": {"name": "Professional", "price_usd": 59, "invoices_per_month": 3000},
-    "business": {"name": "Business", "price_usd": 199, "invoices_per_month": 15000},
+    "business": {"name": "Business", "price_usd": 199, "invoices_per_month": 12000},
 }
 
 
@@ -120,6 +120,7 @@ def _apply_paid_checkout(db: Session, session: dict) -> Organization | None:
     if not already_applied:
         org.plan = plan
         org.plan_started_at = datetime.now(timezone.utc)
+        org.paid_plan_ended_at = None
         org.stripe_subscription_id = subscription_id
         org.subscription_status = "active"
         db.commit()
@@ -670,6 +671,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             org.plan = "free"
             org.subscription_status = "canceled"
             org.plan_started_at = datetime.now(timezone.utc)
+            # The retention job deletes the paid period's invoices a day later.
+            org.paid_plan_ended_at = org.plan_started_at
             db.commit()
             logger.info("Organization '%s' subscription canceled, reverted to free plan.", org.name)
 

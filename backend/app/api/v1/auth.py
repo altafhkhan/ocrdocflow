@@ -171,6 +171,7 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
             "invoices_this_period": None,
             "billing_period_limit": None,
             "billing_period_start": None,
+            "billing_period_end": None,
             "export_format": current_user.export_format or "csv",
         }
 
@@ -183,6 +184,7 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
         "invoices_this_period": usage_service.get_usage_this_period(db, org),
         "billing_period_limit": usage_service.get_plan_limit(org),
         "billing_period_start": usage_service.get_period_start(org),
+        "billing_period_end": usage_service.get_period_end(org),
         "export_format": current_user.export_format or "csv",
     }
 

@@ -44,6 +44,12 @@ class Organization(Base):
     monthly_cost_cap_usd = Column(Numeric(10, 2), nullable=True)
     invoice_limit_override = Column(Integer, nullable=True)
 
+    # Set when a paid plan ends (cancelled in Stripe, or put back on free
+    # by an admin); cleared when a paid plan starts. Invoices uploaded
+    # before this moment are deleted the day after it - see
+    # services/retention_service.py.
+    paid_plan_ended_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     members = relationship("User", back_populates="organization")

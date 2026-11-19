@@ -23,6 +23,14 @@ rate limiting, Stripe subscriptions (starter/professional/business).
   (`PLATFORM_MONTHLY_COST_CAP_USD`), not editable in the app.
 - **Long invoices** count as 1 plan invoice per 25 line items
   (`LINE_ITEMS_PER_INVOICE_UNIT`); the dashboard and Billing page say so.
+- **Invoice retention**: every plan's period is 30 days (Business =
+  12,000 invoices). On a paid plan, the day after a period closes the
+  invoices uploaded before it are deleted, also on renewal; same the day
+  after a paid plan ends. Warning emails go to all team members at
+  80%/90% of the quota and 90%/95% of the period. Runs hourly inside the
+  API (`services/retention_service.py`); `RETENTION_MODE` is `dry_run`
+  by default (logs only) and must be set to `on` on the server to email
+  and delete. See `deploy/DEPLOY.md`, "Invoice retention".
 - **Export** is CSV or Excel (.xlsx); the choice is saved on the user's
   account. No batch upload.
 - **Loyalty coupon**: each paying organization's owner gets one code
