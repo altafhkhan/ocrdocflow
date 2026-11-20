@@ -188,7 +188,7 @@ export default function BillingPage() {
               Limited time offer
             </p>
             <p className="text-lg font-bold text-amber-900">
-              {promo.percent_off}% off for the first {promo.seats_total} subscribers
+              {promo.percent_off}% off for the next {promo.seats_total} subscribers
             </p>
             <p className="text-sm text-amber-800">
               {promo.seats_left} of {promo.seats_total} spots left

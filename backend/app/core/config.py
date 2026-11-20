@@ -104,8 +104,12 @@ class Settings(BaseSettings):
     # the seat limit and the end date.
     PROMO_ENABLED: bool = True
     PROMO_NAME: str = "Launch offer"
-    PROMO_PERCENT_OFF: int = 50
-    PROMO_MAX_REDEMPTIONS: int = 50
+    # 20% for the 47 places that were left of the first offer (50% off for
+    # 50 subscribers, changed 2026-11-21). A new percentage or seat count
+    # makes a new Stripe coupon with its own count; the old coupon stays on
+    # the subscriptions that already have it.
+    PROMO_PERCENT_OFF: int = 20
+    PROMO_MAX_REDEMPTIONS: int = 47
     # "forever" (every invoice of the subscription), "once" (first invoice
     # only) or "repeating" (PROMO_DURATION_MONTHS invoices).
     PROMO_DURATION: str = "forever"
