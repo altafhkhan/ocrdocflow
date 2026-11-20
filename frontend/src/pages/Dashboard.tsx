@@ -194,10 +194,24 @@ export default function Dashboard() {
             {currentUser &&
               currentUser.role !== "admin" &&
               currentUser.plan !== "free" &&
-              currentUser.billing_period_end && (
+              currentUser.billing_period_end &&
+              // Only in the last week of the period.
+              new Date(currentUser.billing_period_end).getTime() - Date.now() <= 7 * 24 * 60 * 60 * 1000 && (
                 <p className="text-xs text-amber-700 mt-1">
                   This period ends on {new Date(currentUser.billing_period_end).toLocaleDateString()}. Download your
                   invoices before then: they are deleted from our servers the next day.
+                </p>
+              )}
+            {currentUser &&
+              currentUser.role !== "admin" &&
+              typeof currentUser.invoices_this_period === "number" &&
+              typeof currentUser.billing_period_limit === "number" &&
+              currentUser.billing_period_limit > 0 &&
+              currentUser.invoices_this_period >= currentUser.billing_period_limit * 0.9 && (
+                <p className="text-xs text-amber-700 mt-1">
+                  {currentUser.invoices_this_period >= currentUser.billing_period_limit
+                    ? `You have used all ${currentUser.billing_period_limit} invoices of this period. Uploads are paused until the next period, or until you choose a bigger plan.`
+                    : `You have used ${Math.floor((currentUser.invoices_this_period / currentUser.billing_period_limit) * 100)}% of your invoices for this period (${currentUser.invoices_this_period} of ${currentUser.billing_period_limit}).`}
                 </p>
               )}
           </div>
