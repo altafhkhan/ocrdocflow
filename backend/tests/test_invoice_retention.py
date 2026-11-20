@@ -40,7 +40,7 @@ def check(name: str, ok: bool) -> None:
 
 
 check("every plan's period is one month", set(usage_service.PLAN_PERIOD_DAYS.values()) == {30})
-check("Business plan allows 12,000 invoices", usage_service.PLAN_LIMITS["business"] == 12000)
+check("Business plan allows 10,000 invoices", usage_service.PLAN_LIMITS["business"] == 10000)
 
 mail_works = True
 outbox: list[tuple[str, str, str]] = []

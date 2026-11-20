@@ -51,7 +51,9 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 # Stripe Dashboard (test mode while developing).
 PLAN_PRICE_IDS = {
     "starter": "price_1U3DmLRl5jDJ23VEjYKOTCbK",
-    "professional": "price_1U3DrkRl5jDJ23VE1szBaeVI",
+    # $65/month since 2026-11-20 (was $59: price_1U3DrkRl5jDJ23VE1szBaeVI,
+    # still valid for subscriptions that were bought at that price).
+    "professional": "price_1Udvd5Rl5jDJ23VEAZYy3fEf",
     "business": "price_1U3DuIRl5jDJ23VEJXVROnc3",
 }
 
@@ -59,10 +61,16 @@ PLAN_PRICE_IDS = {
 FRONTEND_URL = settings.FRONTEND_URL
 
 
+# Prices and limits set 2026-11-20 for a gross profit of about 70% / 60% /
+# 50% at FULL use of the quota, with no discount, at the AI price that
+# applies from January 2027 (about $0.009 per ordinary invoice) and
+# Stripe's 2.9% + $0.30. Change them together with usage_service.PLAN_LIMITS
+# and settings.PLAN_COST_CAPS_USD. A price change also needs a new Stripe
+# Price (PLAN_PRICE_IDS above).
 PLANS = {
     "starter": {"name": "Starter", "price_usd": 19, "invoices_per_month": 500},
-    "professional": {"name": "Professional", "price_usd": 59, "invoices_per_month": 3000},
-    "business": {"name": "Business", "price_usd": 199, "invoices_per_month": 12000},
+    "professional": {"name": "Professional", "price_usd": 65, "invoices_per_month": 2500},
+    "business": {"name": "Business", "price_usd": 199, "invoices_per_month": 10000},
 }
 
 

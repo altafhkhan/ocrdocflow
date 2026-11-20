@@ -85,7 +85,10 @@ class Settings(BaseSettings):
     # Default monthly AI spending cap per customer, by plan (USD, calendar
     # month, 0 = no cap). One customer can be given its own cap in the
     # Admin Panel. Reaching the cap blocks further uploads that month.
-    PLAN_COST_CAPS_USD: str = "free:0.50,starter:6,professional:20,business:50"
+    # The paid values are the AI budget that keeps each plan at its profit
+    # target (see PLANS in api/v1/billing.py): a customer with unusually
+    # dense invoices is stopped before pushing the plan below it.
+    PLAN_COST_CAPS_USD: str = "free:0.50,starter:5,professional:24,business:93"
     # Monthly AI spending cap for the WHOLE platform, visitors included
     # (USD, 0 = no cap). Reaching it pauses all uploads until next month
     # or until this value is raised.

@@ -36,8 +36,8 @@ logger = logging.getLogger("ocrdocflow.usage")
 PLAN_LIMITS = {
     "free": 10,
     "starter": 500,
-    "professional": 3000,
-    "business": 12000,
+    "professional": 2500,
+    "business": 10000,
 }
 
 PLAN_PERIOD_DAYS = {
