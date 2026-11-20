@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { resetPassword } from "../api";
+import PasswordInput from "../components/PasswordInput";
 
 const MIN_LENGTH = 12; // same rule as the Register page
 
@@ -60,21 +61,19 @@ export default function ResetPassword() {
                 )}
               </p>
             )}
-            <input
-              type="password"
+            <PasswordInput
               placeholder={`New password (at least ${MIN_LENGTH} characters)`}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border rounded px-3 py-2 mb-4"
+              className="w-full border rounded px-3 py-2"
               autoComplete="new-password"
               required
             />
-            <input
-              type="password"
+            <PasswordInput
               placeholder="Repeat new password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="w-full border rounded px-3 py-2 mb-4"
+              className="w-full border rounded px-3 py-2"
               autoComplete="new-password"
               required
             />
