@@ -27,6 +27,9 @@ export default function PasswordInput({ wrapperClassName = "relative mb-4", clas
       />
       <button
         type="button"
+        // Keeps the typing cursor in the field when the eye is pressed, so a
+        // phone's on-screen keyboard stays open. Tab still reaches the button.
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => setVisible((v) => !v)}
         aria-label={visible ? "Hide password" : "Show password"}
         aria-pressed={visible}
